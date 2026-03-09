@@ -1,18 +1,25 @@
-﻿# AI-assisted improvement of a guitar preamplifier
+﻿# AI-assisted redesign of a guitar preamplifier
 
-I am not an expert on analog electronics. My actual background includes a PhD in digital audio processing, and my daily job involves software engineering, machine learning, signal processing... but no electronics at all. However, I recently realized I really enjoy learning about analog electronics, so here I am.
+I am not an expert on electronics. My actual background includes a PhD in digital audio processing, and my daily job involves software engineering, machine learning, signal processing... but no electronics at all. However, I recently realized I really enjoy learning about analog electronics, so here I am.
 
-In this article, I explain how I have been experimenting with an AI agents to understand and adapt an existing guitar preamplifier to my requirements. I use AI in some parts of my software engineering job, so I am just applying it in a similar way.
+In this article, I explain how I have been experimenting with an AI agent to understand and adapt an existing guitar preamplifier to my requirements. I used AI for three main purposes:
+
+* Understand an baseline existing design
+* Brainstorm improvements suggestions
+* Introduce changes in the existing design with verifiable metrics, using LTSpice simulation
+
+[![Guitar preamplifier design from RedCircuits.com](https://www.dropbox.com/scl/fi/j1w2b3latuc1dzcs9ssm6/ia_usage_schema.png?rlkey=hmgm9mjfw24pbcfbxjxyl2l60&st=0qr6pca7&raw=1)](https://www.dropbox.com/scl/fi/j1w2b3latuc1dzcs9ssm6/ia_usage_schema.png?rlkey=hmgm9mjfw24pbcfbxjxyl2l60&st=0qr6pca7&raw=1)
 
 I have learned a lot during the process, so I hope it can be inspiring for other people too. I invite any expert to provide feedback that help to improve the approach.
 
 # 1. My requirements
-I want to build a guitar amplifier, and I want it to be as DIY as possible: design, simulation, PCB design, etc. At this moment, I am focused on the design of the preamplifier, and I have these requirements in mind:
-* I'm interested in purely **transistor-based designs**, as a learning exercise. Let's avoid operational amps for now.
-* The preamplifier must be powered with **~15V**.
-* I don't need the best guitar preamplifier, but it has to be **decently designed** according to good practices.
-* The chassis I will use already has holes for 1 jack input + **4 knobs**, so I want it to include: (1) Volume, (2) Drive, (3) Bass, (4) Treble. If the drive knob is at minimum, the sound should be totally clean, and if it is at maximum, it should be very distorted.
-* I will start from an existing design, and I will **iterate** around it.
+Let's assume these are my requirements for a guitar amplifier.
+* ✅ Input suitable for a standard guitar pickup
+* ✅ Output suitable for a standard power amplifier
+* ✅ Power voltage 0-15V
+* ✅ Four knobs: Drive, Bass, Treble, Volume
+* ✅ This is not a lab exercise: it has to work in real-world
+* ✅ Discrete parts only, no op-amps.
 
 # 2. Starting point: a schematic from redcircuits.com
 
@@ -20,37 +27,70 @@ For my exercise, I've used this project as a starting point: https://www.redcirc
 
 [![Guitar preamplifier design from RedCircuits.com](https://www.redcircuits.com/GuitarPre.GIF)](https://www.redcircuits.com/GuitarPre.GIF)
 
-It is based on discrete parts, has some tone control, distortion, seems to be easily adaptable to a lower voltage supply, so it is a good candidate.
+Is this design enough for us?
+* ❓ Input suitable for a standard guitar pickup
+* ❓ Output suitable for a standard power amplifier
+* ❌ Power voltage 0-15V
+* ❌ Four knobs: Drive, Bass, Treble, Volume
+* ❓ Properly designed, it should work as expected
+* ✅ Discrete parts only, no op-amps.
 
-This design was also re-designed by https://tataylino.com/vintage-guitar-preamp-re-design/ , by adapting it to a 12V power supply, simplifying it and fixing an apparent "mistake" he found. We will ignore this redesign by now.
+Let's investigate if my requirements are met, with the help of LTSpice and Gemini.
 
 ## 2.1. LTSpice simulation
 
 Let's begin with a simulation of the existing preamplifier: **does it work?**
 
-### 2.1.1. Operating point analysis
-Here I show the schema I copied in LTSpice, with the DC voltages at different nodes. We will use this preamplifier with a power supply of 15V, but let's see what is happening in the original design with 60V.
-[![LTSpice simulation circuit](https://www.dropbox.com/scl/fi/xkm71kxz0xc1mffqlhpbm/Captura-de-pantalla-2026-02-28-a-las-16.40.37.png?rlkey=myvx0lao4zml05dk2nqqxl5or&st=tfu0ylqr&raw=1)](https://www.dropbox.com/scl/fi/xkm71kxz0xc1mffqlhpbm/Captura-de-pantalla-2026-02-28-a-las-16.40.37.png?rlkey=myvx0lao4zml05dk2nqqxl5or&st=tfu0ylqr&raw=1)
+### 2.1.1. Transient analysis using a 0.5 Vpeak, 1 kHz sine wave
+According to [Rod Elliot](https://sound-au.com/articles/guitar-voltage.htm), a value of 0.5 Vpeak is rather high for guitar pickups, but still realistic for some models, so we will use this input amplitude in our analysis.
 
-Note that I am using the transistor and diode models from the `standard.*` files that come with LTSpice.
+[![LTSpice simulation circuit](https://www.dropbox.com/scl/fi/t5rb5kocnawi6e06ufliy/original_design.png?rlkey=wdgznctyiu3kggrhhqcorpruo&st=g417y9ij&raw=1)](https://www.dropbox.com/scl/fi/t5rb5kocnawi6e06ufliy/original_design.png?rlkey=wdgznctyiu3kggrhhqcorpruo&st=g417y9ij&raw=1)
 
-### 2.1.2. Transient analysis
-I will use a sinusoid input with a frequency of 1000Hz and an amplitude of 150mv, following some guidelines about the expected voltage in guitar pickups (see https://sound-au.com/articles/guitar-voltage.htm).
-[
-![LTSpice simulation circuit](https://www.dropbox.com/scl/fi/busqlrsd085qwezdgz7ff/Captura-de-pantalla-2026-02-28-a-las-16.45.21.png?rlkey=gkm3c3qsl57wh10zcynurxzky&st=z2x9szgd&raw=1)](https://www.dropbox.com/scl/fi/busqlrsd085qwezdgz7ff/Captura-de-pantalla-2026-02-28-a-las-16.45.21.png?rlkey=gkm3c3qsl57wh10zcynurxzky&st=z2x9szgd&raw=1)
+After running this simulation, for `drive=0` (and the rest of parameters as shown in the figure) we get these results in our `.log` file:
+| Node | Vmean | Vmin | Vmax | %THD |
+| :--- | :--- | :--- | :--- | :--- |
+| **V(in)** | 0.00 | -0.50 | 0.50 | 0.00% |
+| **V(q1b)** | 2.50 | 2.12 | 2.88 | 0.00% |
+| **V(q2c)** | 32.53 | 25.78 | 39.29 | 0.02% |
+| **V(mid_in)** | 0.00 | -6.76 | 6.75 | 0.02% |
+| **V(tone_in)** | 0.00 | -6.42 | 6.42 | 0.02% |
+| **V(tone_out)**| 0.00 | -2.10 | 2.10 | 0.02% |
+| **V(q3b)** | 27.57 | 25.47 | 29.67 | 0.02% |
+| **V(q3e)** | 26.92 | 24.82 | 29.01 | 0.03% |
+| **V(out)** | 0.00 | -2.09 | 2.09 | 0.03% |
 
-It amplified the signal from 150mV of amplitude to 630mV of amplitude (gain of 4.2). It seems to be working, so now let's try to understand it.
+If we activate the distortion (`drive=1`):
+| Node | Vmean | Vmin | Vmax | %THD |
+| :--- | :--- | :--- | :--- | :--- |
+| **V(in)** | 0.00 | -0.50 | 0.50 | 0.00% |
+| **V(q1b)** | 2.50 | 2.13 | 2.88 | 1.48% |
+| **V(q2c)** | 32.81 | 27.56 | 39.13 | 9.16% |
+| **V(mid_in)** | 0.00 | -5.21 | 6.32 | 9.16% |
+| **V(tone_in)** | 0.00 | -3.09 | 3.35 | 23.26% |
+| **V(tone_out)**| 0.00 | -1.73 | 1.74 | 33.37% |
+| **V(q3b)** | 27.57 | 25.84 | 29.31 | 33.37% |
+| **V(q3e)** | 26.92 | 25.19 | 28.65 | 33.37% |
+| **V(out)** | 0.00 | -1.73 | 1.73 | 33.37% |
+
+On on the other hand:
+* Input impedance is 285kΩ 
+* Output impedance is 10kΩ
+
+Some preliminary conclusion about how well this design meets my requirements:
+
+### AC analysis: frequency response
+Using a python script and `spicelib`, with the help of Gemini, I used `matplotlib` to create a beautiful plot that illustrates what happens with our preamplifier when you modify `bass` and `treble` controls. We will ignore `brightness` control.
+
+[![LTSpice simulation circuit](https://www.dropbox.com/scl/fi/cmu691a0sbsxga6ana50k/original_design_ac_analysis.png?rlkey=8c12vp7o72heztxzauc2l2je4&st=0nr1ze2u&raw=1)](https://www.dropbox.com/scl/fi/cmu691a0sbsxga6ana50k/original_design_ac_analysis.png?rlkey=8c12vp7o72heztxzauc2l2je4&st=0nr1ze2u&raw=1)
+
+Not sure if this frequency response will produce a beautiful sound, but it is clearly working more or less as expected for both `bass` and `treble` controls.
 
 ## 2.2. Understanding it
-As I don't know much about transistor circuits, I have some questions I'm going to be trying to answer myself with the help of Gemini, books, etc.
+So far, the results provided by the previous analysis look good, and Gemini a priori says the design is properly done. Now, let's spend some time understanding each part of the circuit. This might help in later stages, and is a good learning exercise.
 
 ### 2.2.1. The input stage
-[
-![LTSpice simulation circuit](https://www.dropbox.com/scl/fi/e8k1ggv7m1aep7yrz5pm1/Captura-de-pantalla-2026-02-28-a-las-16.54.48.png?rlkey=pce0hn0ku36tdngaiab0fphz1&st=5gs6ctq2&raw=1)](https://www.dropbox.com/scl/fi/e8k1ggv7m1aep7yrz5pm1/Captura-de-pantalla-2026-02-28-a-las-16.54.48.png?rlkey=pce0hn0ku36tdngaiab0fphz1&st=5gs6ctq2&raw=1)
 
-I know how to analyze basic transistor circuits, but I am not familiar with this topology, so I need some help to understand the key aspects of it. I iterated with Gemini, and the results were pretty satisfactory.
-
-First, I told it to describe this topology, and it said:
+I know how to analyze basic transistor circuits, but I am not familiar with this specific topology, so I need some help to understand the key aspects of it. I iterated with Gemini:
 
 > 1. The "Direct-Coupled Feedback Pair" (specifically an NPN-PNP pair)
 This is the practical, schematic-level name.
@@ -64,7 +104,7 @@ This is the formal, academic name used in university physics and engineering boo
 After some iterations, I was able to find that **Two-Transistor Series-Feedback Gain Stages** is the right keyword for this topology:
 
 [
-![LTSpice simulation circuit](https://www.dropbox.com/scl/fi/ei7xipt6wc0qq6thuwc8r/Captura-de-pantalla-2026-02-28-a-las-21.38.46.png?rlkey=ce78b8vhr9mvkv9g12inntv6e&st=14ijs210&raw=1)](https://www.dropbox.com/scl/fi/ei7xipt6wc0qq6thuwc8r/Captura-de-pantalla-2026-02-28-a-las-21.38.46.png?rlkey=ce78b8vhr9mvkv9g12inntv6e&st=14ijs210&raw=1)
+![LTSpice simulation circuit](https://www.dropbox.com/scl/fi/94ttidc72mrazcleyqloo/input_stage.png?rlkey=q7omij2o7z7nnz9tlv7lpa17b&st=ipkadute&raw=1)](https://www.dropbox.com/scl/fi/94ttidc72mrazcleyqloo/input_stage.png?rlkey=q7omij2o7z7nnz9tlv7lpa17b&st=ipkadute&raw=1)
 
 I also wonder... why are we adding C3 here?
 
@@ -73,10 +113,9 @@ I also wonder... why are we adding C3 here?
 
 Ok, let's believe this.
 
-After some iteration, I also understood the key aspects of this topology to perform a **DC analysis** (after opening all capacitors). If we do a rough approximation (ignoring $I_{2b}$, ignoring the effect of R4 on the voltage divider...):
+**DC analysis**
 
-[
-![LTSpice simulation circuit](https://www.dropbox.com/scl/fi/hk0ut3251xuef7lbvjr27/Captura-de-pantalla-2026-03-01-a-las-12.33.55.png?rlkey=ydtdy9ufyr2hprkg27udt2sh1&st=3cgagucb&raw=1)](https://www.dropbox.com/scl/fi/hk0ut3251xuef7lbvjr27/Captura-de-pantalla-2026-03-01-a-las-12.33.55.png?rlkey=ydtdy9ufyr2hprkg27udt2sh1&st=3cgagucb&raw=1)
+After some iteration, I also understood the key aspects of this topology to perform a DC analysis (after opening all capacitors). If we do a rough approximation (ignoring $I_{2b}$, ignoring the effect of R4 on the voltage divider...):
 
 * $V_{be}$ voltages are constant ~0.65v, so we know $V_{R6} = 0.65$v.
 * Since we know $V_{2b}$, we can know $I_{R6} = 0.65 / 2k2 = 295$µA, which is very similar to $I_{1c}$.
@@ -87,9 +126,8 @@ After some iteration, I also understood the key aspects of this topology to perf
 * $V_{R7} = I_{2c} \cdot R7 = 5.3 \cdot 5k6 \approx 30$v, so $V_{2c} = 30 + 1.85 \approx 32$v. In LTSpice we get 32.52v instead of 32v because of the approximations mentioned before.
 
 **Some considerations about AC analysis**
-For AC analysis, we put our voltage supply to ground, and we consider all coupling and decoupling capacitors as close circuits, but what about Miller capacitor C3? Gemini suggests to treat it as an open circuit because we are interested in the audio bandwidth, and its reactance for these frequencies is very high. 
-[
-![LTSpice simulation circuit](https://www.dropbox.com/scl/fi/ahoooihdmlou3zlnru4uz/Captura-de-pantalla-2026-02-28-a-las-23.05.36.png?rlkey=b4bqr8p0lh8yo1ykqxcq4tbox&st=g29fnuim&raw=1)](https://www.dropbox.com/scl/fi/ahoooihdmlou3zlnru4uz/Captura-de-pantalla-2026-02-28-a-las-23.05.36.png?rlkey=b4bqr8p0lh8yo1ykqxcq4tbox&st=g29fnuim&raw=1)
+
+For AC analysis, we put our voltage supply to ground, and we consider all coupling and decoupling capacitors as close circuits, but what about Miller capacitor C3? Gemini suggests to treat it as an open circuit because we are interested in the audio bandwidth, and its reactance for these frequencies is very high.
 
 Gemini says:
 > When you strip away all the DC bias components, what you are left with is a textbook **Non-Inverting Operational Amplifier** made of discrete parts.
@@ -101,7 +139,7 @@ In LTSpice I get $17.7$, so I guess it is correct as an approximation. Let's go 
 
 Let's go with the middle part. 
 [
-![LTSpice simulation circuit](https://www.dropbox.com/scl/fi/4h4bhmjw5l386o3kffc32/Captura-de-pantalla-2026-02-28-a-las-23.30.49.png?rlkey=s5crdtj220sslequqpzf0foo5&st=ujqp9kib&raw=1)](https://www.dropbox.com/scl/fi/4h4bhmjw5l386o3kffc32/Captura-de-pantalla-2026-02-28-a-las-23.30.49.png?rlkey=s5crdtj220sslequqpzf0foo5&st=ujqp9kib&raw=1)
+![LTSpice simulation circuit](https://www.dropbox.com/scl/fi/odon4j8sfq4g9190pmovh/mid_section.png?rlkey=veno2uyohjmntyv2w71qc609v&st=orjwo7no&raw=1)](https://www.dropbox.com/scl/fi/odon4j8sfq4g9190pmovh/mid_section.png?rlkey=veno2uyohjmntyv2w71qc609v&st=orjwo7no&raw=1)
 
 Again: I'll ask Gemini to find references in well-known literature to understand the design used in this schematic.
 
@@ -116,6 +154,22 @@ Here is the breakdown of the specific topologies used for the clipping and tone 
 > -   **The Dynamic Twist:** In this circuit, the diodes do not go directly to ground. D1 connects to C5, and D2 connects to C6. When a loud signal hits and a diode conducts, it charges its respective capacitor. 
 > -   **The Tube Emulation Effect:** As C5 and C6 charge up, they introduce a DC bias voltage that essentially _raises_ the clipping threshold for the next wave. The harder you play, the higher the threshold pushes back. As the note decays, the capacitors discharge through R11, lowering the threshold again.
 > -   **The Result:** This creates a dynamic, "rubbery" feel that responds to pick attack, commonly referred to as "sag." It is a well-known solid-state technique used to emulate the asymmetrical duty-cycle shift and grid-clipping characteristics of an overdriven 12AX7 vacuum tube. P4 acts as a variable series resistor to control how hard the signal hits this network, essentially acting as a "Drive" or "Shape" control.
+
+I used a guitar recording as input in V1 (`wavefile="../../audios/dry_guitar_5s.wav"`), and I was able to observe the behavior described by Gemini: the capacitors create a envelope follower, so the bias of the diode clipping is dynamic, allowing more dynamics than just the two diodes to ground.
+
+[![LTSpice simulation circuit](https://www.dropbox.com/scl/fi/yhxxy8udxd9mcev8ydf6c/diode_clipping.png?rlkey=qc2tp5xac8xxkljlwtw6s1m2b&st=l90wm55s&raw=1
+)](https://www.dropbox.com/scl/fi/yhxxy8udxd9mcev8ydf6c/diode_clipping.png?rlkey=qc2tp5xac8xxkljlwtw6s1m2b&st=l90wm55s&raw=1
+)
+
+I have been investigating if this is a standard way of applying distortion in pedals or guitar preamps, but it does not seem to be very common. I found similar topologies for envelope followers, and I also found information about similar approaches in existing designs.
+
+In "Solid-State Guitar Amplifiers" by Teemu Kyttälä, I was able to find references to a circuit that behaves similarly:
+
+[
+![LTSpice simulation circuit](https://www.dropbox.com/scl/fi/iqkzpvlrjy71ldfnn4fuv/Captura-de-pantalla-2026-03-01-a-las-0.47.20.png?rlkey=vm43ao2m3bhmilke0z7lggwcb&st=xosj3dhl&raw=1)](https://www.dropbox.com/scl/fi/iqkzpvlrjy71ldfnn4fuv/Captura-de-pantalla-2026-03-01-a-las-0.47.20.png?rlkey=vm43ao2m3bhmilke0z7lggwcb&st=xosj3dhl&raw=1)
+
+However, I did not find any existing diode clipper design exactly as ours in the documentation I checked.
+
 > ### 2. The Tone Control: The James Tone Network
 > **Components involved:** C7, R12, P2 (Treble), P1 (Bass), R14, R15, R13, C9.
 > 
