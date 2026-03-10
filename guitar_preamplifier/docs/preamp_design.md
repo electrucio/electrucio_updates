@@ -308,3 +308,35 @@ I didn't spend much time with ellaborated prompts, but I got good results anyway
 
 This part has been iterated almost completely with Gemini. I share the conversation [here](https://github.com/electrucio/electrucio_updates/blob/main/guitar_preamplifier/docs/chats/red_circuits_analysis_and_iteration_1.pdf).
 
+The main changes applied, summarized by Gemini:
+
+[
+![LTSpice simulation circuit](https://www.dropbox.com/scl/fi/clhneso7vohjwp7vhqjg7/Captura-de-pantalla-2026-03-11-a-las-0.28.26.png?rlkey=xfji4yz0qgocctbozmjnezd1t&st=agnpgfth&raw=1)](https://www.dropbox.com/scl/fi/clhneso7vohjwp7vhqjg7/Captura-de-pantalla-2026-03-11-a-las-0.28.26.png?rlkey=xfji4yz0qgocctbozmjnezd1t&st=agnpgfth&raw=1)
+
+
+> The following table summarizes the primary structural and technical changes:
+> ### 1. Power Supply and Headroom Management
+> * **Voltage Reduction:** The power supply was dropped from **60V** down to **15V**.
+>
+> * **Headroom Philosophy:** The original design relied on massive voltage swing for "infinite" clean headroom. The redesign uses a lower rail to intentionally allow for organic transistor saturation when driven hard.
+>
+> * **Power Filtering:** Resistor **R21** was reduced from **330 $\Omega$** to **100 $\Omega$** to minimize DC voltage drop and preserve precious headroom on the lower 15V supply.
+>
+> ### 2. Input Stage: Variable Gain vs. Fixed Gain
+>
+> * **New Drive Topology:** The redesign introduces a new variable-gain architecture using a **1k $\Omega$ Reverse Log (C-Taper) potentiometer (P4)**.
+>
+> * **AC Bypassing:** P4 is placed in an AC-coupled path to ground off the emitter of Q1, allowing the user to sweep gain from roughly **1.5x (clean)** to **48x (heavy overdrive)** without upsetting the DC bias.
+>
+> * **DC Bias Stabilization:** To accommodate the 15V rail and the new gain structure, **R3** was changed from **680k $\Omega$** to **56k $\Omega$** and **R7** from **5.6k $\Omega$** to **220 $\Omega$** to anchor the Q2 collector at roughly **7.5V**.
+>
+> ### 3. Output Stage: Active Makeup Gain
+> *  **Topology Shift:** In the 60V version, **Q3** was a unity-gain **Emitter Follower (Buffer)**. In the 15V redesign, it is reconfigured as a **Common Emitter amplifier**.
+>
+> * **Makeup Gain:** This change provides a **~7x voltage boost** to recover signal lost in the passive tone stack and clipping diodes, ensuring the output is hot enough (**~1V RMS**) to drive a power amplifier.
+>
+> ### 4. Distortion and Tone Shaping
+>
+> * **Clipping Diodes:** The redesign swaps **BAT46WJ Schottky diodes** (0.3V threshold) for **1N4148 Silicon diodes** (0.6V threshold). This results in a more dynamic, "amp-like" crunch with less compression.
+>
+>* **Continuous Control:** The original "binary" Drive switch was replaced by the continuous P4 potentiometer control, allowing a sweep from **0.07% THD (clean)** to **~36% THD (saturated)**.
