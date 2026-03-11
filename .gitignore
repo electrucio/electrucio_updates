@@ -1,0 +1,14 @@
+# OS (macOS y Windows)
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+
+# LTspice y simulaciones de audio
+*.raw
+*.op.raw
+
+# Python y Jupyter Notebooks
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
