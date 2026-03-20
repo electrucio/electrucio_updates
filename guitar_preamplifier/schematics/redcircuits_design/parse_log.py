@@ -2,6 +2,22 @@ import re
 import os
 import math
 
+def parse_net_params(net_file):
+    """Parses scalar .param values from an LTspice .net file."""
+    params = {}
+    param_pattern = re.compile(r'^\.param\s+(\w+)\s*=\s*([+-]?\d+(?:\.\d+)?(?:e[+-]?\d+)?)\s*$', re.IGNORECASE)
+    for enc in ('utf-16-le', 'utf-8'):
+        try:
+            with open(net_file, 'r', encoding=enc, errors='replace') as f:
+                for line in f:
+                    m = param_pattern.match(line.strip())
+                    if m:
+                        params[m.group(1).lower()] = float(m.group(2))
+            break
+        except Exception:
+            continue
+    return params
+
 def parse_ltspice_log(filepath):
     """Parses an LTspice .log file and extracts key measurements."""
 
@@ -46,17 +62,32 @@ def parse_ltspice_log(filepath):
                     thd_data[current_fourier_node] = float(thd_match.group(1))
                     current_fourier_node = None
 
-    print_report(meas_data, thd_data, step_info)
+    params_data = {}
+    net_file = filepath[:-4] + '.net'
+    if os.path.exists(net_file):
+        params_data = parse_net_params(net_file)
 
-def print_report(meas, thd, step_info):
+    print_report(meas_data, thd_data, params_data, step_info)
+
+def print_report(meas, thd, params, step_info):
     """Formats and prints the parsed data into a friendly dashboard."""
 
     print("\n" + "="*105)
     print("🎸 GUITAR PREAMP SIMULATION REPORT (RED CIRCUITS DESIGN)")
     print("="*105)
 
+    # --- 0. SIMULATION PARAMETERS ---
+    print("\n[ 0. SIMULATION PARAMETERS ]")
+    print("-" * 105)
     if step_info:
-        print(f"\n  • Active Step : {step_info}")
+        print(f"  • Active Step  : {step_info}")
+    if params:
+        print(f"  • Input        : {params.get('in_amplitude', 'N/A')} V  @  {params.get('in_freq', 'N/A')} Hz")
+        print(f"  • Drive        : {params.get('drive', 'N/A')}  (0=off, 1=on)")
+        print(f"  • Brightness   : {params.get('brightness', 'N/A')}  (0=off, 1=on)")
+        print(f"  • Bass         : {params.get('bass', 'N/A')}  (0–1)")
+        print(f"  • Treble       : {params.get('treble', 'N/A')}  (0–1)")
+        print(f"  • Volume       : {params.get('vol', 'N/A')}  (0–1)")
 
     # --- 1. BIAS POINTS ---
     print("\n[ 1. BIAS POINTS (DC Operating Points) ]")
