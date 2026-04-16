@@ -1,0 +1,13 @@
+services:
+  elcigala-jupyter:
+    image: openems-lab
+    ports:
+      - "8053:8888"
+    volumes:
+      # Monta la carpeta local actual (.) dentro de /work en el contenedor.
+      # Todo lo que guardes en /work (excepto sim_crosstalk) persistirá en tu disco duro.
+      - .:/work
+    tmpfs:
+      # Monta un disco RAM de 50GB *por encima* de la carpeta sim_crosstalk.
+      # Todo lo que caiga aquí dentro volará a velocidad de RAM y se borrará al apagar.
+      - /work/sim_crosstalk:rw,size=50G
