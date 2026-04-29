@@ -1,0 +1,86 @@
+{
+    "tracks": [
+        {
+            "net": "/aggressor",
+            "start_x": 147.0,
+            "start_y": 80.46,
+            "end_x": 113.41,
+            "end_y": 80.46,
+            "width": 0.2
+        },
+        {
+            "net": "/victim",
+            "start_x": 113.41,
+            "start_y": 83.0,
+            "end_x": 115.41,
+            "end_y": 81.0,
+            "width": 0.2
+        },
+        {
+            "net": "/victim",
+            "start_x": 115.41,
+            "start_y": 81.0,
+            "end_x": 145.0,
+            "end_y": 81.0,
+            "width": 0.2
+        },
+        {
+            "net": "/victim",
+            "start_x": 145.0,
+            "start_y": 81.0,
+            "end_x": 147.0,
+            "end_y": 83.0,
+            "width": 0.2
+        }
+    ],
+    "pads": [
+        {
+            "net": "/aggressor",
+            "pos_x": 147.0,
+            "pos_y": 80.46,
+            "size_x": 1.7,
+            "size_y": 1.7,
+            "layer": "F.Cu"
+        },
+        {
+            "net": "/victim",
+            "pos_x": 147.0,
+            "pos_y": 83.0,
+            "size_x": 1.7,
+            "size_y": 1.7,
+            "layer": "F.Cu"
+        },
+        {
+            "net": "/aggressor",
+            "pos_x": 113.41,
+            "pos_y": 80.46,
+            "size_x": 1.7,
+            "size_y": 1.7,
+            "layer": "F.Cu"
+        },
+        {
+            "net": "/victim",
+            "pos_x": 113.41,
+            "pos_y": 83.0,
+            "size_x": 1.7,
+            "size_y": 1.7,
+            "layer": "F.Cu"
+        },
+        {
+            "net": "GND",
+            "pos_x": 129.0,
+            "pos_y": 87.0,
+            "size_x": 1.7,
+            "size_y": 1.7,
+            "layer": "F.Cu"
+        }
+    ],
+    "board_params": {
+        "min_x": 0.0,
+        "min_y": 0.0,
+        "max_x": 0.0,
+        "max_y": 0.0,
+        "thickness": 1.6,
+        "epsilon_r": 4.3
+    }
+}
