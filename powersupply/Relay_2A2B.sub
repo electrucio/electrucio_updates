@@ -1,0 +1,82 @@
+* Relay_2A2B
+*
+* Relay 2 Form A and 2 Form B contacts
+* BEHAVORIAL MODEL
+*
+* (C) Robert Loos 2024
+*
+* Note: Coil is polarized!
+*
+* Modelled Parameters:
+* Rcoil:   Coil resistance
+* Lcoil:   Coil inductance
+* Von:     Must operate voltage
+* Voff:    Must release voltage
+* Tdelay:  Delay time
+* Tfly:    Contact fly time
+* Ron:     Contact resistance
+* Roff:    Isolation resistance
+*
+* C1 and R2 provide a "Spike Protection" (Tau=Tdelay/5)
+* to prevent the relay from operating from short spikes greater than Von
+* if the voltage does not go below Voff afterwards.
+* This makes the time values unsecure. Play with Tdelay if timing is critical.
+*
+.SUBCKT Relay_2A2B Coil+ Coil- NO11 NO12 NC11 NC12 NO21 NO22 NC21 NC22
+.param Von=9 Voff=1.2 Tdelay=5m Tfly=20m Rcoil=720 Lcoil=1 Ron=10m Roff=1G
+.model sw sw(Vt=0.5 Ron={Ron} Roff={Roff})
+A1 Coil+ N005 0 0 0 0 SW_On 0 SCHMITT Vt={(Von+Voff)/2} Vh={(Von-Voff)/2}
+A2 N001 0 0 0 0 N003 N002 0 BUF Td={Tfly}
+A4 0 N003 0 N004 0 0 NC 0 AND Trise=10n
+R1 Coil+ N006 {Rcoil}
+A7 0 N001 0 N002 0 0 NO 0 AND Trise=10n
+S1 NC11 NC12 NC 0 SW
+S2 NC21 NC22 NC 0 SW
+S3 NO11 NO12 NO 0 SW
+S4 NO21 NO22 NO 0 SW
+L1 N006 Coil- {Lcoil}
+A3 SW_On 0 0 0 0 N004 N001 0 BUF Td={Tdelay}
+C1 Coil+ N005 1n
+R2 N005 Coil- {Tdelay/1e-9/5}
+.ends
+*
+* Enhanced model with bouncing
+*
+* Additional parameter:
+* Tbounce: Bouncing time
+*
+.SUBCKT Relay_2A2B_Bounce Coil+ Coil- NO11 NO12 NC11 NC12 NO21 NO22 NC21 NC22
+.param Von=9 Voff=1.2 Tdelay=5m Tfly=20m Tbounce=2m Rcoil=720 Lcoil=1 Ron=10m Roff=1G
+.model sw sw(Vt=0.5 Vh=0.1 Ron={Ron} Roff={Roff})
+A1 Coil+ N013 0 0 0 0 SW_On 0 SCHMITT Vt={(Von+Voff)/2} Vh={(Von-Voff)/2}
+A2 N003 0 0 0 0 N011 N010 0 BUF Td={Tfly}
+A4 0 N011 0 N012 0 0 NC 0 AND Trise=10n
+R1 Coil+ N014 {Rcoil}
+A7 0 N003 0 N010 0 0 NO 0 AND Trise=10n
+S1 NC11 NC12 N019 0 SW
+S2 NC21 NC22 N022 0 SW
+S3 NO11 NO12 N006 0 SW
+S4 NO21 NO22 N009 0 SW
+L1 N014 Coil- {Lcoil}
+A3 SW_On 0 0 0 0 N012 N003 0 BUF Td={Tdelay}
+C1 Coil+ N013 1n
+R2 N013 Coil- {Tdelay/1e-9/5}
+A5 NO 0 0 0 0 N002 0 0 BUF Td={Tbounce}
+A6 0 Noise2 0 N002 NO N007 0 0 AND
+A8 0 N002 0 N007 0 N008 0 0 AND
+A9 NO 0 0 0 0 N001 0 0 BUF Td={Tbounce}
+A10 0 Noise1 0 N001 NO N004 0 0 AND
+A11 0 N001 0 N004 0 N005 0 0 AND
+A12 NC 0 0 0 0 N016 0 0 BUF Td={Tbounce}
+A13 0 Noise2 0 N016 NC N020 0 0 AND
+A14 0 N016 0 N020 0 N021 0 0 AND
+A15 NC 0 0 0 0 N015 0 0 BUF Td={Tbounce}
+A16 0 Noise1 0 N015 NC N017 0 0 AND
+A17 0 N015 0 N017 0 N018 0 0 AND
+A18 0 N008 0 NO 0 0 N009 0 AND
+A19 0 N021 0 NC 0 0 N022 0 AND
+A20 0 N005 0 NO 0 0 N006 0 AND
+A21 0 N018 0 NC 0 0 N019 0 AND
+B1 Noise1 0 V=round(white(3e4*time)+0.5)
+B2 Noise2 0 V=round(white(3e4*time+1000)+0.5)
+.ends
