@@ -12,3 +12,9 @@ Thumbs.db
 .ipynb_checkpoints/
 __pycache__/
 *.pyc
+
+*.lck
+~*.kicad_sch.lck
+~*.kicad_pcb.lck
+*.tmp
+*.bak
