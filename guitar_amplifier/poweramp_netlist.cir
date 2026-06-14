@@ -1,0 +1,103 @@
+* poweramp — netlist recovered from "poweramp BOM.html" (InteractiveHtmlBom, --include-nets)
+* Source PCB: poweramp, dated 2026-06-04 17:07:47
+* SPICE / LTspice-compatible netlist. Node 0 = GND.
+*
+* Net name mapping (KiCad -> here):
+*   /POW                  -> VCC       (raw supply, VCC1 connector)
+*   /POW1                 -> VCC_F1    (after R26, filtered by C14)
+*   /POW2                 -> VCC_F2    (after R2, filtered by C3, front-end supply)
+*   Net-(PREAMP1-Pin_1)   -> IN
+*   Net-(C10-Pad1)        -> OUT       (output node, before coupling cap C10)
+*   Net-(SPEAKER1-Pin_1)  -> SPK
+*   Net-(C4-Pad2)         -> FB        (feedback / Q1 emitter decoupling node)
+*   Net-(C8-Pad1)         -> BOOT      (bootstrapped VAS load node)
+*   Net-(C7-Pad1)         -> LAG       (R11/C7 node)
+*   Net-(C9-Pad2)         -> ZOB       (Zobel midpoint)
+*   Net-(R7-Pad2)         -> BIAS_T    (R7 / RV2 ccw end)
+*   Net-(R8-Pad1)         -> BIAS_B    (RV2 cw end / R8)
+*   Net-(Qx-y)            -> Qx_y      (e.g. Net-(Q1-B) -> Q1_B)
+*
+* Transistor pin order below is SPICE standard: Q <collector> <base> <emitter>
+
+* --- Input stage ---
+R1   Q1_B  IN     1k
+R3   VCC_F2 Q1_B  150k
+C2   Q1_B  0      150p
+C12  VCC_F2 Q1_B  22p
+Q1   Q1_C  Q1_B  Q1_E  BC556B
+R6   Q1_C  0      1k
+R5   OUT   Q1_E   4.7k
+C4   Q1_E  FB     150u
+R4   FB    0      47
+* RV1 250k trimmer (Piher PT-6-V): pads 1 & 2 (wiper) both on FB, pad 3 on Q1_B
+* -> wired as rheostat between FB and Q1_B; modeled at full value, adjust as needed
+RV1  FB    Q1_B   250k
+
+* --- VAS ---
+Q2   Q2_C  Q1_C  0     BD139
+C11  Q2_C  Q1_C   100p
+C5   Q1_C  0      10n
+R11  Q2_C  LAG    220
+C7   LAG   0      330p
+C6   Q3_C  Q2_C   10n
+* Bootstrapped VAS load
+R9   VCC_F1 BOOT  1k
+R10  BOOT  Q3_C   2.7k
+C8   BOOT  OUT    33u
+
+* --- Bias spreader (adjustable Vbe multiplier, Q3) ---
+* Footprint is plain TO-126-3_Vertical; pin roles confirmed by KiCad auto net names
+Q3   Q3_C  Q3_B  Q2_C  BD139
+R7   Q3_C  BIAS_T 2.2k
+* RV2 1k trimmer (Piher PT-10-V), wiper (pad 2) to Q3 base; split 50/50 here
+RV2A BIAS_T Q3_B  500
+RV2B Q3_B  BIAS_B 500
+R8   BIAS_B Q2_C  1k
+
+* --- Drivers & output stage (quasi-complementary, 2SD896 = NPN Darlington) ---
+Q4   VCC   Q4_B  Q4_E  BD139
+R12  Q4_B  Q3_C   470
+R14  Q4_E  OUT    56
+Q6   VCC   Q4_E  Q6_E  2SD896
+R16  Q6_E  OUT    0.5
+
+Q5   Q5_C  Q5_B  D10_K BD140
+R13  Q5_B  Q2_C   470
+R15  Q5_C  0      56
+D10  D10_A D10_K  1N4007
+R17  OUT   D10_A  0.5
+Q7   D10_A Q5_C  0     2SD896
+
+* --- Supply rails ---
+R26  VCC   VCC_F1 47
+C14  VCC_F1 0     1000u
+R2   VCC_F1 VCC_F2 1k
+C3   VCC_F2 0     3.3u
+
+* --- Output coupling, feedback take-off, Zobel ---
+C10  OUT   SPK    3300u
+R19  SPK   FB     2.2k
+C9   OUT   ZOB    100n
+R18  ZOB   0      10
+
+* --- Connectors (off-board) ---
+* VCC1     (JST XH 2p): 1=VCC  2=GND
+* PREAMP1  (JST XH 2p): 1=IN   2=GND
+* SPEAKER1 (JST XH 2p): 1=SPK  2=GND
+* H1, H2: mounting holes, unconnected
+
+* --- Uncomment to simulate ---
+*VSUP  VCC 0  40
+*VIN   IN  0  AC 1 SIN(0 0.5 1k)
+*RLOAD SPK 0  8
+*.tran 0 50m 0 1u
+*.ac dec 50 10 1Meg
+
+* --- Models: replace with your library models ---
+* 2SD896 is an NPN Darlington (TO-3P); single-BJT model below is a rough stand-in
+.model BC556B PNP(IS=1e-14 BF=320 VAF=80 IKF=0.1 CJC=9p TF=0.6n)
+.model BD139  NPN(IS=1e-13 BF=100 VAF=100 IKF=1 CJC=50p TF=20n)
+.model BD140  PNP(IS=1e-13 BF=100 VAF=100 IKF=1 CJC=60p TF=25n)
+.model 2SD896 NPN(IS=5e-12 BF=4000 VAF=100 IKF=8 CJC=300p TF=80n)
+
+.end
