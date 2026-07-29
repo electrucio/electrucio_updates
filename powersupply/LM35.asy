@@ -1,0 +1,13 @@
+Version 0
+SymbolType BLOCK
+RECTANGLE Normal -16 -12 16 12 2
+TEXT 0 0 Center 2 ºC
+PIN -48 0 LEFT 8
+PINATTR PinName 1
+PINATTR SpiceOrder 1
+PIN 0 48 BOTTOM 8
+PINATTR PinName 2
+PINATTR SpiceOrder 2
+PIN 48 0 RIGHT 8
+PINATTR PinName 3
+PINATTR SpiceOrder 3
