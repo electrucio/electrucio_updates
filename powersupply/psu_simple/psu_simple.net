@@ -1,0 +1,222 @@
+* psu_simple - LM317 solo, tomas manuales, sin referencia negativa
+* -----------------------------------------------------------------------------
+* Derivado de psu.asc / psu.net.  Tres simplificaciones respecto al original:
+*   1. Conmutacion de tomas por reles  -> selector manual (.param TAP=1|2|3).
+*      Fuera: XU2 XU6 XU3 XU4 M1 M2 D1 D2 R1 R2 R6..R12 R32 R33
+*             y los snubbers/zeners por devanado (C3..C5 R24..R26 D5..D10).
+*      Usar un rotativo BREAK-BEFORE-MAKE: uno make-before-break cortocircuita
+*      un devanado.  Queda un unico snubber RC en la entrada del puente.
+*   2. Banco de paso  -> solo el LM317, que se autoprotege.
+*      Fuera: Q1 Q3 (2N3055) Q4 Q5 R19 R20 R21 R29 C1 ; R28 pasa a ser un hilo.
+*   3. Referencia de -1,25 V  -> masa.  Fuera: XU12 V6 R43.
+*      Coste: la salida no baja de ~1,3 V, asi que el lazo de CC solo regula
+*      mientras Rcarga > 1,3 V / Ilimite.  Por debajo (corto franco) actua el
+*      limitador interno del 317: 2,5 A medidos.
+*
+* Recalibraciones obligadas por lo anterior:
+*   R46 39k -> 27k   sin el rail negativo la salida sube 1,25 V para la misma
+*                    consigna y el margen del OVP caia de 3,2 V a 1,8 V.
+*   R23  9k -> 24k   el CC estaba a 2,5 A, por encima de lo que da el 317.
+*                    Ahora 1,0 A (= 0,1 V sobre R22).  Un solo resistor lo mueve.
+*   R57 18k -> 27k   OTP de 89,3 -> 67,6 C.  Con un TO-220 la union esta ~5 C/W
+*                    por encima del disipador; a 89 C de disipador la union
+*                    estaria a ~160 C.
+*
+* Medido en simulacion (LTspice 17.2.4):
+*   TAP=1  VRAW+ 16,1 V   salida 1,25 .. 14,2 V
+*   TAP=2  VRAW+ 33,4 V   salida 1,25 .. 30,4 V   VLOAD = 5,799*Vcontrol + 1,259
+*   TAP=3  VRAW+ 53,7 V   NO USAR con un LM317 estandar:
+*            - ante un corto el diferencial es 53,7 V > 40 V de maximo absoluto
+*            - arranca enclavado: mientras C6 carga, la salida da un pico de
+*              4,45 V contra un umbral de OVP de 4,5 V.  Alargar el POR no lo
+*              arregla (probado con C11=4u7: el pico sube a 4,62 V).
+*          Requiere LM317HV (60 V), o quitar el tercer transformador.
+*   CC     1,005 A con carga resistiva (entra en CC por debajo de ~12 ohm)
+*   OVP    dispara 19 us tras un corto entrada-salida del 317, enclava y corta M4
+*   Corto  TAP=1: 11,6 V / 2,51 A / 29 W    TAP=2: 26,0 V / 2,51 A / 65 W
+*          (los aguanta el apagado termico del 317, no el diseno)
+* -----------------------------------------------------------------------------
+L3 N014 N018 50
+R3 N018 NEUTRAL 70
+L4 N024 N026 50
+R4 N026 NEUTRAL 70
+L5 N030 N031 50
+R5 N031 NEUTRAL 70
+L13 N013 N019 160m
+R13 N019 N023 0.18
+L14 N023 N027 160m
+R14 N027 N025 0.18
+L15 N025 N032 160m
+R15 N032 VACneg 0.18
+V1 LIVE NEUTRAL SINE(0 325 50)
+R_NEUTRAL NEUTRAL 0 1G
+D11 VACneg VRAW+ 1N5408
+D12 VACpos VRAW+ 1N5408
+D13 0 VACpos 1N5408
+D14 0 VACneg 1N5408
+C6 VRAW+ 0 10000u
+R28 N021 PASS_IN 1m
+V3 VCC 0 12
+XU1 Vadj VLOAD N021 LM317HV
+R16 VLOAD Vadj 100
+R17 Vadj 0 R = V(Vcontrol) * 470
+RLOAD N022 Vshunt R=limit(0.1 + V(vload)*V(load)*0.02, 0.1, 1Meg)
+XU7 2v5 0 2v5 TL431ED
+R18 VCC 2v5 220
+V2 Vcontrol 0 PULSE(1m 5000m 0.5 0.5 0.5 0 1 5)
+V4 load 0 PULSE(167 50 0.3 100u 100u 0.3 0.6 10)
+R22 Vshunt 0 0.1
+XU8 ISENSE CC_IN VCC 0 CC_OUT OP747
+R23 2v5 CC_REF 24k
+R27 CC_REF 0 1k
+Q6 Vadj LATCH_B 0 0 BD139
+R_Bleeder VRAW+ 0 4k7
+D15 VLOAD PASS_IN 1N5408
+RF1 N014 LIVE 0.5m
+RF2 N024 LIVE 0.5m
+RF3 N030 LIVE 0.5m
+RF4 N022 VLOAD 5u
+D16 M4_G VRAW+ BZX84C12L
+C7 Vadj 0 4u7
+D17 Vadj VLOAD 1N4148
+C8 VLOAD P001 47u
+R34 P001 0 0.22
+S1 VLOAD PASS_IN Q3_Short_simulation 0 MYSW
+V5 Q3_Short_simulation 0 PULSE(0 12 2.3 10u 10u 3 5 1)
+XU10 VREF_0V VSENSE VCC 0 FAULTn LM339 LM339
+R35 VSENSE 0 1k
+R36 VLOAD VSENSE 10k
+R37 VREF_0V 0 4k7
+R38 Vcontrol VREF_0V 10k
+XU11 Tsense N036 VCC 0 N037 OP747
+R39 2v5 N036 51k
+R40 N036 0 10k
+M3 FAN_HI fan_drive 0 0 2N7002
+R41 fan_drive N037 100
+R42 fan_drive 0 100k
+RFAN VCC FAN_HI 40
+D19 FAN_HI VCC 1N4148
+R44 N037 N036 330k
+XX1 VCC Tsense 0 LM35
+R46 2v5 VREF_0V 27k
+M4 PASS_IN M4_G VRAW+ VRAW+ IRF9540N
+R48 GATE_DRV M4_G 2k2
+R49 M4_G VRAW+ 4k7
+D4 0 VLOAD 1N5408
+R30 Vshunt ISENSE 1k
+C2 ISENSE 0 100n
+R31 CC_IN CC_REF 15k
+C9 CC_OUT CC_IN 100n
+R45 CC_B CC_OUT 4k7
+R47 0 CC_B 10k
+Q2 Vadj CC_B 0 0 BD139
+Q7 GATE_DRV N011 0 0 MMBTA42
+R50 N011 FAULTn 10k
+R51 0 N011 10k
+R62 LATCH_IN FAULTn 47k
+C15 0 LATCH_IN 470p
+XU5 2v5 LATCH_IN VCC 0 LATCH LM339 LM339
+R52 VCC LATCH 1k5
+C10 LATCH 0 1n
+R53 LATCH VSENSE 1k
+XU9 POR 2v5 VCC 0 LATCH LM339 LM339
+R54 VCC POR 1Meg
+C11 POR 0 220n
+R55 LATCH_B LATCH 10k
+R56 LATCH_B 0 2k2
+R57 2v5 OTP_REF 27k
+R58 OTP_REF 0 10k
+XU13 OTP_REF Tsense VCC 0 FAULTn LM339 LM339
+R59 FAULTn VCC 10k
+C14 VSENSE 0 10n
+.model D D
+.lib /Users/emolina/Library/Application Support/LTspice/lib/cmp/standard.dio
+.model NPN NPN
+.model PNP PNP
+.lib /Users/emolina/Library/Application Support/LTspice/lib/cmp/standard.bjt
+.model NMOS NMOS
+.model PMOS PMOS
+.lib /Users/emolina/Library/Application Support/LTspice/lib/cmp/standard.mos
+K3 L3 L13 0.999
+K4 L4 L14 0.999
+K5 L5 L15 0.999
+.model 1N5408 D(Is=63.0n Rs=14.1m Bv=1000 Ibv=10u Cjo=53p M=0.333 N=1.30 Eg=1.11)
+.tran 0 7 0 2m startup
+.lib LM339.sub
+**********************************************************************************
+* Model developed by Eugene Dvoskin  "http://www.audio-perfection.com"  02/05/2012
+* This TL431 model has been developed from schematic in the datasheet
+* http://www.ti.com/lit/ds/symlink/tl431.pdf
+* It matches most of DC, AC, Transient, Stability and Noise performance of TI TL431
+* No attempts were made to cover Temperature dependences
+*********************************************************************************
+.SUBCKT TL431ED CATHODE ANODE REF
+Q1 CATHODE REF N005 QN_ED
+R4 N005 N009 3.28k
+R2 N009 N012 2.4k
+R3 N009 N010 7.2k
+Q2 N012 N012 ANODE QN_ED area=1.2
+Q3 N010 N012 N014 QN_ED area=2.2
+R1 N014 ANODE 800
+Q4 N003 N005 N006 QN_ED
+R5 N006 N011 4k
+Q5 N011 N010 ANODE QN_ED
+Q6 N004 N013 ANODE QN_ED area=0.5
+Q7 N003 N003 N001 QP_ED
+Q8 N004 N003 N002 QP_ED
+R7 CATHODE N001 800
+R8 CATHODE N002 800
+Q9 CATHODE N004 N007 QN_ED
+R9 N008 N007 150
+Q10 CATHODE N008 ANODE QN_ED area=5
+R10 N008 ANODE 10k
+Q11 N004 N004 REF QN_ED
+D1 ANODE N004 D_ED
+R6 N013 N012 1k
+D2 ANODE CATHODE D_ED
+C1 CATHODE N004 10p
+C2 N010 N011 20p
+.model QN_ED NPN(BF=140 Cje=1p Cjc=2p Rb=40 VAF=80 VAR=50 KF=3.2e-16 AF=1)
+.model QP_ED PNP(BF=60 Cje=1p Cjc=3p Rb=80 VAF=70 VAR=40)
+.MODEL D_ED D(Rs=5 CJ0=4.0p)
+.ends TL431ED
+.MODEL BD139 NPN(IS=2.3985E-13 BF=244.9 NF=1.0 BR=78.11 NR=1.007 ISE=1.0471E-14
++ NE=1.2 ISC=1.9314E-11 NC=1.45 VAF=98.5 VAR=7.46 IKF=1.1863 IKR=0.1445 RB=2.14
++ RBM=0.001 IRB=0.031 RE=0.0832 RC=0.01 CJE=2.92702E-10 VJE=0.67412 MJE=0.3300
++ FC=0.5 CJC=4.8831E-11 VJC=0.5258 MJC=0.3928 XCJC=0.5287 XTB=1.1398 EG=1.2105 XTI=3.0)
+.MODEL BD140 PNP(IS=1.408E-13 BF=163.6 NF=1.0 BR=42.79 NR=1.0 ISE=3.58E-14
++ NE=1.5 ISC=4.093E-11 NC=1.45 VAF=64.2 VAR=100 IKF=1.077 IKR=0.2 RB=1.98
++ RBM=0.001 IRB=0.024 RE=0.063 RC=0.01 CJE=3.045E-10 VJE=0.697 MJE=0.344
++ FC=0.5 CJC=6.78E-11 VJC=0.526 MJC=0.404 XCJC=0.528 XTB=1.35 EG=1.21 XTI=3.0)
+.model MYSW SW(Ron=0.1 Roff=1Meg Vt=6 Vh=2 level=2)
+Vamb  amb 0 25
+Rth   Tj amb 1.5
+Cth   Tj amb 4
+Bheat amb Tj I=limit((V(VRAW+)-V(VLOAD))*abs(I(R22)),0,2k)
+.subckt LM35 VS OUT GND
+Bo OUT GND V=0.01*V(Tj)     ; 10 mV/?C lei?dos del nodo te?rmico Tj
+Ri OUT GND 100k
+.ends LM35
+Bfan Tj amb I=((V(VCC)-V(FAN_HI))/12)*0.93*(V(Tj)-V(amb))
+.global Tj
+.options reltol=1e-3 abstol=1u vntol=1u trtol=1 method=trap
+.model MMBTA42 NPN(IS=1.15E-14 BF=120 NF=1 VAF=100 IKF=0.1 ISE=1E-13 NE=1.5 BR=1 NR=1 VAR=30 IKR=0.05 RB=10 RC=1 CJE=11p CJC=4p VJC=0.75 MJC=0.33 TF=1n TR=100n)
+.ic V(POR)=0
+.model IRF9540N VDMOS(pchan Vds=-100 Ron=0.117 Qg=51n Vto=-3.0 Kp=6 lambda=0.005
++ Rs=20m Rd=60m Rg=2 Cgdmax=1.4n Cgdmin=0.06n Cgs=1.1n Cjo=0.5n Is=20p mfg=IR)
+.lib ADI.lib
+.lib LM317HV.sub
+.lib LTC3.lib
+* --- selector manual de tomas: .param TAP = 1 | 2 | 3 --------------
+.param TAP=2
+.model SWMAN SW(Ron=10m Roff=1G Vt=6 Vh=2 level=2)
+S_TAP1 N025 VACpos TAP_SEL1 0 SWMAN
+S_TAP2 N023 VACpos TAP_SEL2 0 SWMAN
+S_TAP3 N013 VACpos TAP_SEL3 0 SWMAN
+V_TAP1 TAP_SEL1 0 {12*(TAP==1)}
+V_TAP2 TAP_SEL2 0 {12*(TAP==2)}
+V_TAP3 TAP_SEL3 0 {12*(TAP==3)}
+C3 VACpos N016 0.33u
+R24 N016 VACneg 100
+.backanno
+.end
