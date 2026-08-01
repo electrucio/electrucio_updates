@@ -132,18 +132,38 @@ def case_cv(b: Bench):
 
 
 def case_ripple(b: Bench):
-    print("== Rizado y rechazo en funcion del margen de rail (TAP=2) ==")
-    print("   El fallo tipico: si la consigna supera lo que da la toma, el")
-    print("   regulador entra en dropout y la salida COPIA el rizado del rail.")
-    print(f"\n  {'pote':>6}{'pedido':>9}{'Vout':>9}{'margen':>9}"
-          f"{'rizado out':>12}{'rizado rail':>12}{'rechazo':>10}")
-    for vs in (1.0, 0.85, 0.8, 0.75, 0.7, 0.5, 0.3):
-        d, m, q = b.run(f"rp_{vs}", tap=2, vset=vs, step="20u")
-        ped = 1.25 * (1 + vs * 3900 / 120) + 50e-6 * vs * 3900
-        flag = "  <-- DROPOUT" if q["headroom"] < 2.5 else ""
-        print(f"  {vs*100:5.0f}%{ped:8.1f}V{q['vout_dc']:8.2f}V"
-              f"{q['headroom']:8.2f}V{q['vout_pp']*1e3:11.1f}mV"
-              f"{q['vraw_pp']*1e3:11.0f}mV{q['rechazo_db']:9.1f}dB{flag}")
+    print("== Rizado y rechazo en funcion del margen de rail, en las TRES tomas ==")
+    print("   El fallo tipico: el pote llega a 42 V en cualquier posicion del")
+    print("   selector, asi que en las tomas bajas es facil pedir mas de lo que")
+    print("   dan.  Ahi el regulador entra en dropout y la salida COPIA el rizado.")
+    print("   El rizado del rail crece con la CORRIENTE (carga fija de 100 ohm),")
+    print("   no con la toma: es I/(2*f*C) y no depende de la tension.")
+    limites = {}
+    for tap, nombre in ((1, "un devanado"), (2, "dos devanados"), (3, "tres devanados")):
+        print(f"\n  --- TAP={tap} ({nombre}) ---")
+        print(f"  {'pote':>6}{'pedido':>9}{'Vout':>9}{'margen':>9}"
+              f"{'rizado out':>12}{'rizado rail':>12}{'rechazo':>10}")
+        maxpote = None
+        for vs in (1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.3, 0.15):
+            d, m, q = b.run(f"rp{tap}_{vs}", tap=tap, vset=vs, step="20u")
+            ped = 1.25 * (1 + vs * 3900 / 120) + 50e-6 * vs * 3900
+            seco = q["headroom"] < 2.5
+            if not seco and maxpote is None:
+                maxpote = (vs, q["vout_dc"])
+            print(f"  {vs*100:5.0f}%{ped:8.1f}V{q['vout_dc']:8.2f}V"
+                  f"{q['headroom']:8.2f}V{q['vout_pp']*1e3:11.1f}mV"
+                  f"{q['vraw_pp']*1e3:11.0f}mV{q['rechazo_db']:9.1f}dB"
+                  f"{'  <-- DROPOUT' if seco else ''}")
+        limites[tap] = maxpote
+    print("\n  Pote maximo sin caer en dropout (carga ligera):")
+    for tap, mp in limites.items():
+        if mp is None:
+            print(f"    TAP={tap}: ninguna posicion es segura")
+        elif mp[0] >= 1.0:
+            print(f"    TAP={tap}: el 100 % -> {mp[1]:.1f} V.  El pote NO puede "
+                  f"meterte en dropout en esta toma.")
+        else:
+            print(f"    TAP={tap}: hasta ~{mp[0]*100:.0f} % -> {mp[1]:.1f} V")
 
 
 def case_cc(b: Bench):

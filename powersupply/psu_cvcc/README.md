@@ -103,19 +103,36 @@ encapsulado.
 
 Es lo primero con lo que te vas a topar. El LM317HV necesita ~2 V de caída
 para regular; por debajo entra en dropout y **la salida copia el rizado del
-raíl 1:1**. Medido a TAP=2:
+raíl 1:1**. Y como el pote llega hasta 42 V en cualquier posición del
+selector, en las tomas bajas es fácil pedirle más de lo que puede dar.
 
-| pote | pedido | Vout | margen | rizado salida | rechazo |
+**Hasta dónde puedes subir el pote sin caer en dropout** (carga ligera):
+
+| toma | devanados | VRAW+ | pote máximo | Vout máx | por encima de eso |
 |---|---|---|---|---|---|
-| 100 % | 42,1 V | 31,28 V | 2,01 V | **246 mV** | **0,0 dB** |
-| 80 % | 33,9 V | 31,27 V | 2,01 V | **248 mV** | **0,0 dB** |
-| 70 % | 29,8 V | 29,56 V | 3,68 V | 0,3 mV | 57,1 dB |
-| 50 % | 21,7 V | 21,49 V | 12,18 V | 0,3 mV | 56,8 dB |
+| TAP=1 | uno | 16,5 V | ~35 % | 13,4 V | 121 mV de rizado, 0 dB |
+| TAP=2 | dos | 33,3 V | ~72 % | 29,6 V | 247 mV de rizado, 0 dB |
+| TAP=3 | tres | 49,9 V | **100 %** | 41,7 V | **no llega a dropout** |
+
+En TAP=3 el pote no puede meterte en dropout: al máximo todavía quedan 8 V de
+margen. En TAP=1 y TAP=2 sí, y el salto es brusco:
+
+| toma | pote | Vout | margen | rizado salida | rechazo |
+|---|---|---|---|---|---|
+| TAP=2 | 80 % | 31,27 V | 2,01 V | **248 mV** | **0,0 dB** |
+| TAP=2 | 70 % | 29,56 V | 3,68 V | 0,3 mV | 57,1 dB |
+| TAP=1 | 50 % | 14,50 V | 2,01 V | **123 mV** | **0,0 dB** |
+| TAP=1 | 30 % | 13,38 V | 3,10 V | 0,2 mV | 56,4 dB |
 
 No hay zona intermedia: o tienes 3 V de margen y el rizado son décimas de
 milivoltio, o no lo tienes y sale el rizado entero del condensador. **Regla:
 `VRAW_min − Vout ≥ 3 V`.** Por eso el `.asc` viene con `Vset=0.5`; con
 `Vset=1` en TAP=2 arranca en dropout y parece que el diseño es malo.
+
+Ojo al leer la columna del rizado del raíl: crece con la toma (121 / 246 /
+322 mV) **porque crece la corriente**, no por la toma en sí. Estas medidas son
+con una carga fija de 100 Ω, así que a más tensión de salida más corriente.
+El rizado del raíl es `I / (2·f·C)` y no depende de la tensión.
 
 A plena corriente el raíl cae ~1,5 V más, así que el techo útil de cada toma
 con 1 A es menor que en vacío: 11 V en TAP=1, 27 V en TAP=2, 39 V en TAP=3.
