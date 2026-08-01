@@ -1,0 +1,33 @@
+* ----------------------------------------------------------------------------
+* LM358 - modelo conductual de UN operacional del par
+*
+* Se usa este y no el OP747 de ADI.lib por dos razones:
+*   - la pieza que pide el diseno es un LM358: alimentacion simple y rango de
+*     modo comun de entrada que INCLUYE el negativo, que es lo que hace falta
+*     para sensar un shunt de 33 mV referido a masa.
+*   - el macromodelo del OP747 no converge en este circuito (falla el .op con
+*     "Time step too small; initial timepoint: trouble with node u2:5").
+*
+* Modela: ganancia en lazo abierto 100 dB, GBW 1 MHz (polo dominante a 10 Hz),
+* recorte de salida a ~20 mV del rail negativo y a V+ -1,5 V, e impedancia de
+* salida de 10 ohm.
+*
+* NO modela: offset de entrada (tipico 2 mV, max 7 mV en el LM358 -> a 100 mA
+* de consigna el shunt da 33 mV, asi que cuenta con ~6-20 % de error en el
+* extremo bajo de la escala de corriente; con un OP07 bajaria a <1 %),
+* corriente de polarizacion, slew rate, ni deriva termica.
+*
+* Pines:  IN+  IN-  V+  V-  OUT
+* ----------------------------------------------------------------------------
+.subckt LM358 1 2 3 4 5
+.param GM=100u AOL=100k FGBW=1Meg
+
+* transconductancia de entrada, con la excursion diferencial acotada
+Bgm   4 INT I = {GM} * limit( V(1)-V(2), -0.5, 0.5 )
+Rp    INT 4 {AOL/GM}
+Cp    INT 4 {GM/(2*3.14159265*FGBW)}
+
+* salida recortada a los railes reales del LM358
+Bout  OUTX 0 V = limit( V(INT), V(4)+0.02, V(3)-1.5 )
+Rout  OUTX 5 10
+.ends LM358
