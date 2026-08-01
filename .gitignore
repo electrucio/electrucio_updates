@@ -21,3 +21,4 @@ __pycache__/
 
 # LTspice sobrescribe este netlist al abrir el .asc; el .asc es la fuente
 powersupply/psu_cvcc/psu_cvcc.net
+powersupply/psu_cvcc/psu_cvcc.log

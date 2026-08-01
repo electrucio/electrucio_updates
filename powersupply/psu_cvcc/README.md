@@ -99,6 +99,100 @@ Ningún diferencial pasa de los 60 V del máximo absoluto. §8.3.2 avisa de que
 superarlos destruye el chip, y en TO-220 lo típico es que reviente el
 encapsulado.
 
+## El rizado depende del margen de raíl, y el salto es brusco
+
+Es lo primero con lo que te vas a topar. El LM317HV necesita ~2 V de caída
+para regular; por debajo entra en dropout y **la salida copia el rizado del
+raíl 1:1**. Medido a TAP=2:
+
+| pote | pedido | Vout | margen | rizado salida | rechazo |
+|---|---|---|---|---|---|
+| 100 % | 42,1 V | 31,28 V | 2,01 V | **246 mV** | **0,0 dB** |
+| 80 % | 33,9 V | 31,27 V | 2,01 V | **248 mV** | **0,0 dB** |
+| 70 % | 29,8 V | 29,56 V | 3,68 V | 0,3 mV | 57,1 dB |
+| 50 % | 21,7 V | 21,49 V | 12,18 V | 0,3 mV | 56,8 dB |
+
+No hay zona intermedia: o tienes 3 V de margen y el rizado son décimas de
+milivoltio, o no lo tienes y sale el rizado entero del condensador. **Regla:
+`VRAW_min − Vout ≥ 3 V`.** Por eso el `.asc` viene con `Vset=0.5`; con
+`Vset=1` en TAP=2 arranca en dropout y parece que el diseño es malo.
+
+A plena corriente el raíl cae ~1,5 V más, así que el techo útil de cada toma
+con 1 A es menor que en vacío: 11 V en TAP=1, 27 V en TAP=2, 39 V en TAP=3.
+
+## ¿Qué pasa si cortocircuito la salida?
+
+No se rompe. El límite de corriente, la protección SOA y el apagado térmico
+están para esto; TI describe la combinación como *"blowout proof"* (§3). Y el
+dato que de verdad importa: en ninguna toma el diferencial llega a los 60 V
+del máximo absoluto (47 V en el peor caso, TAP=3). Esa —y no la
+temperatura— es la condición que destruye el chip, y §8.3.2 avisa de que en
+TO-220 lo típico es que reviente el encapsulado.
+
+Simulado, aplicando un corto franco con la fuente en régimen:
+
+| toma | P en corto | Tj a 1,2 s | Tj a 30 s | corta a los |
+|---|---|---|---|---|
+| TAP=1 | 26,0 W | 108 °C | 122 °C | **no corta nunca** |
+| TAP=2 | 46,2 W | 155 °C | 190 °C | 2,8 s |
+| TAP=3 | 39,4 W | 139 °C | 169 °C | 17,5 s |
+
+En TAP=2 y TAP=3 el chip se apaga, se enfría, vuelve a arrancar y se vuelve a
+apagar: ciclado térmico. Ruidoso y feo, pero es justo para lo que está.
+
+**El caso incómodo es TAP=1**, que es el que no parece peligroso: ahí no corta
+nunca. Se queda indefinidamente disipando 26 W con la unión a 122 °C, justo
+por debajo del máximo de 125 °C, y el disipador a ~77 °C. Sobrevive, pero es
+el único escenario en que la fuente aguanta un corto para siempre sin
+quejarse, calentando todo lo que tenga al lado.
+
+Lo que sí puede sufrir en un corto sostenido:
+
+- **Rshunt**, el único componente sin protección en ese camino: 2,19² × 0,33 =
+  1,58 W en TAP=1. Con uno de 1 W se quema. **De 3 W.**
+- **El electrolítico de 10.000 µF**, si va pegado al disipador. A 77–118 °C la
+  vida útil se desploma. Sepáralo.
+
+El puente y los transformadores van sobrados: 3 W entre los cuatro diodos.
+
+## Disipación: peor caso de cada componente
+
+`verify_psu_cvcc.py --only power` recorre 12 escenarios (las tres tomas ×
+vacío / 1 A / salida mínima a 1 A / cortocircuito) y saca el peor caso de
+cada componente:
+
+| componente | peor caso | escenario | veredicto |
+|---|---|---|---|
+| LM317HV | 46,3 W | T2 corto | corta el apagado térmico, ver arriba |
+| Puente (4 diodos) | 3,05 W | T1 corto | 1N5408 de sobra |
+| **Rshunt 0,33** | **1,58 W** | T1 corto | **ponlo de 3 W** |
+| R2 pote 3k9 | 0,42 W | T3 vacío | 1 W vale |
+| Rbleed 10k | 0,29 W | T3 vacío | 1 W vale |
+| resto | <0,05 W | | 1/8 W vale |
+
+Y el dato de dimensionado que más fácilmente muerde: **el pico por cada diodo
+del puente es de 7,13 A y el RMS por el secundario 3,52 A** para 1 A de
+continua a la salida. Es el factor de forma normal de un rectificador con
+condensador a la entrada (~3,5×), pero significa que los transformadores hay
+que dimensionarlos para eso, no para 1 A.
+
+## Instrumentación
+
+El esquemático lleva **41 directivas `.meas`** que salen en el `.log` (Ctrl+L
+en la GUI): tensión y corriente de salida con su rizado, rizado y mínimo del
+raíl, margen de dropout, rechazo en dB, todos los nodos del lazo de control,
+si está en CV o en CC, la disipación de cada componente uno por uno, el pico
+por los diodos, el RMS por el secundario y las temperaturas.
+
+Dos trampas al añadir medidas propias:
+
+- **`.meas` solo ve lo que `.save` haya guardado.** Un `.save` parcial hace
+  que cualquier medida que toque una corriente no listada devuelva 0 sin
+  avisar. Por eso la suite no usa `.save`.
+- **La constante térmica del modelo son 40 s**, así que la Tj al final de un
+  transitorio de 1,5 s no es la de régimen. El peor caso se calcula:
+  `Tj = 25 + P · 4,3`.
+
 ## Cuatro cosas que hay que saber
 
 **El límite de corriente tiene un suelo de 1,25 V.** El NPN no puede llevar
