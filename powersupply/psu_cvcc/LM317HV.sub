@@ -1,0 +1,68 @@
+* ----------------------------------------------------------------------------
+* LM317HV - modelo conductual
+*
+* Escrito porque el LT317A.sub que trae LTspice viene cifrado y, siendo la
+* pieza de 40 V, DEJA DE REGULAR por encima de esa tension: con 50 V de
+* entrada saca 2,98 V en vez de 1,25 V, y 9,4 V con carga ligera.  Cualquier
+* simulacion de la toma alta con LT317A da resultados falsos.
+*
+* Parametros sacados de TI SNVS773D rev D (sept 2015), LM117HV/LM317HV:
+*   - Vref = 1,25 V entre OUT y ADJ            (tabla 7.5)
+*   - corriente del pin ADJ = 50 uA tipica     (tabla 7.5)
+*   - diferencial entrada-salida hasta 60 V    (tabla 7.1, maximos absolutos)
+*   - limite de corriente con plegado SOA, TO-220/TO-3 (tabla 7.5):
+*         2,2 A tipicos con Vin-Vout <= 15 V
+*         0,3 A            con Vin-Vout <= 60 V
+*     interpolado linealmente entre ambos puntos
+*   - dropout ~2 V (figura 4)
+*
+* NO modela: apagado termico, corriente minima de carga (3,5 mA tip / 12 mA
+* max a 60 V de diferencial), deriva con la temperatura, ni ruido.  La
+* corriente minima de carga hay que garantizarla fuera con el divisor:
+* R16 <= 100 ohm da 12,5 mA y cumple el caso peor.
+*
+* Pines en el mismo orden que LT317A.sub:  ADJ  OUT  IN
+* ----------------------------------------------------------------------------
+.subckt LM317HV ADJ OUT IN
+.param VREF=1.25 VDO=2 IADJ=50u GM=10m CC=10n RINT=1Meg
+
+* corriente del pin de ajuste
+Iadj  ADJ 0 {IADJ}
+
+* limite de corriente plegado por SOA en funcion del diferencial
+Blim  ILIM 0 V = 0.3 + 1.9*(1 - limit((V(IN)-V(OUT)-15)/45, 0, 1))
+
+* Error del lazo.  CTL es la CAIDA que el elemento de paso debe presentar, y el
+* error es el mas restrictivo de dos exigencias, cada una positiva cuando pide
+* mas caida:
+*   (a) regulacion:  OUT - ADJ - 1,25 > 0  -> la salida se ha ido alta
+*   (b) corriente:   I(OUT) - ILIM   > 0  -> hay que estrangular
+Berr  ERR 0 V = max( V(OUT) - V(ADJ) - {VREF}, (I(Vsns) - V(ILIM))*10 )
+
+* Integrador CON PERDIDAS (polo en Rint*Cint = 10 ms, ganancia en continua
+* GM*RINT = 1e4 -> el error crece con la caida, ~5 mV a 50 V).  Dos motivos para que Rint
+* exista y para que el anti-windup NO sea un if():
+*   - sin Rint, CTL solo cuelga de un condensador y una fuente de corriente
+*     (impedancia infinita): no hay camino de continua a masa y el .op sale
+*     singular.
+*   - un anti-windup con if() mete una discontinuidad de derivada justo en
+*     CTL=0, que es donde arranca el .op, y Newton no converge en el circuito
+*     completo ("Time step too small; initial timepoint").  Un integrador con
+*     perdidas acota CTL solo, sin discontinuidades.
+Bint  0 CTL I = V(ERR)*{GM}
+Cint  CTL 0 {CC}
+Rint  CTL 0 {RINT}
+
+* Elemento de paso: caida controlada entre IN y OUT.  Modelarlo como fuente de
+* CORRIENTE no converge (nodo de impedancia infinita); como caida de tension si.
+* El min(...,V(IN)) impide que el suelo de dropout empuje la salida por debajo
+* de cero mientras el rail todavia se esta cargando.
+Bpass IN N1 V = min( limit(V(CTL), {VDO}, 200), V(IN) )
+* Dsrc: un LM317 SOLO PUEDE ENTREGAR corriente, no absorberla.  Sin este diodo
+* el modelo sujeta la salida por arriba y el OVP nunca ve una sobretension: un
+* fallo de "el regulador se ha puesto en corto" (S1 entre IN y OUT) sale como
+* una CAIDA de la salida en vez de como una subida.
+Dsrc  N1 N2 Dsrc
+Vsns  N2 OUT 0
+.model Dsrc D(Ron=10m Roff=1G Vfwd=0 epsilon=0.02)
+.ends LM317HV

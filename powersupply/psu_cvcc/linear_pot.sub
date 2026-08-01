@@ -1,0 +1,11 @@
+* Linear Potentiometer
+* _____
+* 1--|_____|--2
+* |
+* 3
+*
+.SUBCKT linear_pot 1 2 3
+.param w=limit(wiper,0,1)
+R0 1 3 {Rtot * (1 - w) + 1m}
+R1 3 2 {Rtot * w + 1m}
+.ENDS

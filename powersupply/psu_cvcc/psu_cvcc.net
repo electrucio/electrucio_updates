@@ -1,0 +1,162 @@
+* ============================================================================
+* psu_cvcc  - Fuente lineal DIY con LM317HV. CV y CC ajustables.
+*
+* Diseno hecho desde cero siguiendo los circuitos de aplicacion de
+* TI SNVS773D rev D (LM117HV/LM317HV, sept 2015).  No lleva nada que no este
+* en el datasheet:
+*
+*   fig. 16  (§9.2.1)   regulador ajustable 1,25-45 V con R1/R2
+*   fig. 21  (§9.2.5)   10 uF en ADJ -> 80 dB de rechazo de rizado
+*   fig. 15  (§8.4.2)   D_ADJ y D_IN, obligatorios con salida >25 V
+*   fig. 32  (§9.2.16)  limite de corriente: shunt en el retorno y un NPN que
+*                       tira del pin ADJ hacia masa
+*   fig. 31  (§9.2.15)  un operacional atacando la base de ese NPN, para que
+*                       el limite sea ajustable en vez de fijo por Vbe
+*
+* Las protecciones de sobrecorriente, cortocircuito y sobretemperatura son las
+* NATIVAS del chip.  No hay OVP, ni latch, ni POR, ni disyuntor, ni OTP.
+*
+* Seleccion de tomas: MANUAL, con un rotativo 1P3T.  .param TAP = 1 | 2 | 3
+* ============================================================================
+.param TAP=2
+
+*** Red y transformadores ****************************************************
+* Tres secundarios de ~13 Vrms en serie.  Cada uno con su primario acoplado:
+* son tres transformadores independientes, que es como estan montados.
+V1      LIVE NEUTRAL SINE(0 325 50)
+Rgnd    NEUTRAL 0 1G
+RF1     LIVE LP1 0.5m               ; fusible de primario
+Lp1     LP1 NP1 50
+Rp1     NP1 NEUTRAL 70              ; resistencia de primario, EN SERIE con Lp1
+RF2     LIVE LP2 0.5m
+Lp2     LP2 NP2 50
+Rp2     NP2 NEUTRAL 70
+RF3     LIVE LP3 0.5m
+Lp3     LP3 NP3 50
+Rp3     NP3 NEUTRAL 70
+Ls1     TAP3 NS1  160m
+Rs1     NS1  TAP2 0.18
+Ls2     TAP2 NS2  160m
+Rs2     NS2  TAP1 0.18
+Ls3     TAP1 NS3  160m
+Rs3     NS3  ACLO 0.18
+K1 Lp1 Ls1 0.999
+K2 Lp2 Ls2 0.999
+K3 Lp3 Ls3 0.999
+
+*** Selector manual de tomas *************************************************
+* Rotativo 1P3T BREAK-BEFORE-MAKE.  Uno make-before-break cortocircuitaria un
+* devanado al pasar de posicion.  Conmutar siempre con la salida descargada:
+* cortar 160 mH con corriente hace arco en los contactos.
+.model SWMAN SW(Ron=10m Roff=1G Vt=6 Vh=2 level=2)
+S_T1    TAP1 ACHI SEL1 0 SWMAN
+S_T2    TAP2 ACHI SEL2 0 SWMAN
+S_T3    TAP3 ACHI SEL3 0 SWMAN
+V_S1    SEL1 0 {12*(TAP==1)}
+V_S2    SEL2 0 {12*(TAP==2)}
+V_S3    SEL3 0 {12*(TAP==3)}
+* Snubber en la entrada del puente, para el arco del selector.
+Csnub   ACHI NSNUB 0.1u
+Rsnub   NSNUB ACLO 100
+
+*** Rectificacion ************************************************************
+D_B1    ACLO VRAW 1N5408
+D_B2    ACHI VRAW 1N5408
+D_B3    0    ACHI 1N5408
+D_B4    0    ACLO 1N5408
+Cbulk   VRAW 0 10000u
+Rbleed  VRAW 0 10k                  ; descarga: 10k*10m = 100 s
+Cin     VRAW 0 0.1u                 ; §8.4.1, el chip no esta a <6" del bulk
+
+*** Alimentacion del control *************************************************
+* +12 V de un transformador auxiliar pequeno (1,5 VA, 12 V) con su puente y un
+* 7812.  NO se puede sacar del rail principal: entre TAP=1 y TAP=3 va de 16 a
+* 50 V, y un resistor+zener dimensionado para dar corriente a 16 V disiparia
+* ~2,4 W a 50 V.  El auxiliar tiene que ser independiente de la toma.
+Vaux    VCC 0 12
+
+*** Referencia de 2,5 V ******************************************************
+Rref    VCC VREF25 2k2              ; (12-2,5)/2k2 = 4,3 mA, holgado para el 431
+Xref    VREF25 0 VREF25 TL431ED
+Cref    VREF25 0 100n
+
+*** Regulador ****************************************************************
+* fig. 16: Vout = 1,25 * (1 + R2/R1) + Iadj*R2
+* R1 = 120 ohm da 10,4 mA de carga minima permanente.  El datasheet pide hasta
+* 12 mA en el caso peor (60 V de diferencial, tabla 7.5) y 10 mA es lo que
+* indica la fig. 28; con las tomas bien elegidas nunca estamos en el caso peor.
+XU1     VADJ VOUT VRAW LM317HV
+R1      VOUT VADJ 120
+* R2 = pote de 3k9.  Vout max = 1,25*(1+3900/120) + 50u*3900 = 42,1 V
+R2      VADJ 0 R = V(VSET) * 3900
+Cadj    VADJ 0 10u                  ; fig. 21 / §8.4.2: 80 dB a cualquier Vout
+Cout    VOUT 0 10u                  ; §8.4.2: >=1 uF de tantalo asegura estabilidad
+
+* Diodos de proteccion.  Con salida >25 V y 10 uF en ADJ el datasheet los da
+* por OBLIGATORIOS (§8.4.2 y §11.1), no opcionales.
+D_ADJ   VADJ VOUT 1N4148            ; descarga Cadj si se cortocircuita la salida
+D_IN    VOUT VRAW 1N5408            ; desvia Cout si se cortocircuita la entrada
+D_REV   0    VOUT 1N5408            ; polaridad inversa en bornes
+
+*** Sensado de corriente *****************************************************
+* Shunt en el RETORNO, como la fig. 32.  0,33 ohm: 0,40 V y 0,48 W a 1,2 A,
+* y 33 mV a 100 mA, suficiente para un operacional de offset bajo.
+* Contrapartida: el negativo de la carga queda 0,4 V por encima de la masa.
+Rshunt  VRTN 0 0.33
+Rfilt   VRTN SENSE 1k
+Cfilt   SENSE 0 100n
+
+*** Consigna de corriente ****************************************************
+* 2,5 V -> 22k -> pote de 4k7 -> masa.  Tope = 2,5*4,7/26,7 = 0,44 V,
+* o sea 0,44/0,33 = 1,33 A a fondo de escala.
+Rset    VREF25 ISET 22k
+Rpot_i  ISET 0 R = V(ISETADJ) * 4700
+
+*** Lazo de corriente ********************************************************
+* Integrador: R*C = 10k*1u -> 16 Hz, muy por debajo del rizado de 100 Hz.
+* Lento a proposito: para el transitorio rapido ya esta el limite interno.
+XU2     SENSE CCIN VCC 0 CCOUT LM358
+Rint    CCIN ISET 10k
+Cint    CCOUT CCIN 1u
+* fig. 32 + fig. 31: el operacional ataca la base del NPN que tira de ADJ.
+Rb      CCOUT CCB 4k7
+Rbe     CCB 0 10k
+Qcc     VADJ CCB 0 0 QNPN
+
+*** Modelo termico (solo simulacion) *****************************************
+* Union -> disipador: TO-220 RthJC(bot) = 0,9 C/W (tabla 7.4) + mica ~1,4.
+* Disipador -> ambiente: 2 C/W.  El modelo del LM317HV NO implementa el
+* apagado termico, asi que Tj es informativo: si pasa de 125 C, en la pieza
+* real habria cortado.
+.global Tj
+Vamb    AMB 0 25
+Rth_sa  TSINK AMB 2
+Cth_sa  TSINK AMB 20
+Rth_js  Tj TSINK 2.3
+Cth_js  Tj TSINK 0.02
+Bheat   AMB Tj I = limit( (V(VRAW)-V(VOUT)) * abs(I(Rshunt)), 0, 500 )
+
+*** Estimulos de simulacion **************************************************
+Vset     VSET 0 1                   ; pote de tension, 0..1 = 0..3k9
+Visetadj ISETADJ 0 1                ; pote de corriente, 0..1 = 0..4k7
+Rload    VOUT VRTN R = limit(V(LOAD), 0.2, 1Meg)
+Vload    LOAD 0 100
+
+*** Modelos ******************************************************************
+.model 1N5408 D(Is=63.0n Rs=14.1m Bv=1000 Ibv=10u Cjo=53p M=0.333 N=1.30 Eg=1.11)
+.model 1N4148 D(Is=2.52n Rs=0.568 N=1.752 Cjo=4p M=0.4 tt=20n Iave=200m Vpk=75)
+.model QNPN NPN(IS=1e-14 BF=200 VAF=100 RB=10 RC=1 CJE=11p CJC=4p TF=1n)
+.lib LM317HV.sub
+.lib TL431ED.sub
+.lib LM358.sub
+
+*** Analisis *****************************************************************
+* uic NO es opcional: sin el, el .op no converge (Gmin stepping y source
+* stepping fallan, el pseudo-transitorio "encuentra" un punto que sale NaN y
+* el transitorio entero hereda el NaN).  El lazo de CC atado al pin ADJ es
+* lo que lo hace irresoluble.  Con uic + startup se arranca de cero con las
+* fuentes en rampa, que es ademas lo que pasa de verdad al dar tension.
+.ic V(Tj)=25 V(TSINK)=25
+.options reltol=1e-3 abstol=1u vntol=1u
+.tran 0 1.5 0 100u startup uic
+.end

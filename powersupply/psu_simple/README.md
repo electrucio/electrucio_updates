@@ -1,152 +1,102 @@
-# psu_simple — fuente lineal DIY con LM317HV, CV + CC ajustables
+# psu_simple — fuente lineal DIY con LM317HV
 
-Diseño hecho **desde cero**, no derivado de
-[`../psu_overengineered/`](../psu_overengineered/). Se ciñe a los circuitos de
-aplicación de **TI SNVS773D rev D** (LM117HV/LM317HV, sept. 2015); no lleva
-nada que no esté en el datasheet.
+Segundo diseño de la serie: una **poda** de
+[`../psu_overengineered/`](../psu_overengineered/), no un diseño nuevo. Arrastra
+sus decisiones (el OVP con seguimiento, el latch, el disyuntor M4, el control de
+ventilador) y por eso se acabó rehaciendo desde cero en
+[`../psu_cvcc/`](../psu_cvcc/), que es el que se va a construir. Se conserva
+como paso intermedio documentado. Se genera con:
 
-| | |
-|---|---|
-| Tensión | 1,25 – 41,7 V, pote de 3k9 |
-| Corriente | límite ajustable 80 mA – 1,34 A, pote de 4k7 |
-| Tomas | 3, selección **manual** con rotativo 1P3T |
-| Protecciones | las **nativas** del chip: límite de corriente con plegado SOA, cortocircuito y apagado térmico |
+```bash
+python3 tools/ltspice/simplify_psu.py
+```
 
-## De dónde sale cada parte
+que deriva `psu_simple.net` desde `psu_overengineered/psu.net` mediante
+parches explícitos: si el esquemático original cambia una de las líneas que
+toca, el script revienta en vez de aplicarse a medias.
 
-| bloque | referencia |
-|---|---|
-| Regulador ajustable con R1/R2 | fig. 16, §9.2.1 |
-| 10 µF en ADJ para el rechazo de rizado | fig. 21, §9.2.5 |
-| Diodos D_ADJ y D_IN | fig. 15, §8.4.2 y §11.1 |
-| Límite de corriente: shunt en el retorno + NPN que tira de ADJ | fig. 32, §9.2.16 |
-| Operacional atacando la base de ese NPN | fig. 31, §9.2.15 |
+## Qué se quitó (~40 componentes)
 
-Lo único que añade el diseño sobre la figura 32 es hacer el límite
-**ajustable**: la figura 32 lo fija por Vbe (0,6 A con 1 Ω) y no se puede
-bajar sin poner un shunt enorme. Comparando el shunt contra una referencia
-ajustable de un TL431, el rango va de 80 mA a 1,34 A con un shunt de 0,33 Ω.
+1. **Conmutación de tomas por relés → selector manual.** Fuera XU2, XU6, XU3,
+   XU4, M1, M2, D1, D2, R1, R2, R6–R12, R32, R33 y los snubbers/zeners por
+   devanado. En el netlist el selector es `.param TAP=1|2|3`.
+2. **Banco de paso → solo el regulador**, que se autoprotege. Fuera Q1, Q3
+   (2N3055), Q4, Q5, R19, R20, R21, R29, C1; R28 pasa a ser un hilo.
+3. **Referencia de −1,25 V → masa.** Fuera XU12, V6, R43.
 
-## Lista de componentes
+Y el código muerto del crowbar de tiristor (`SCR`, `D1N4752A`, `IRF4905`).
 
-**Potencia**
-- 3 transformadores de ~13 Vrms, secundarios en serie
-- SW1 rotativo 1P3T **break-before-make**, + snubber 0,1 µF / 100 Ω
-- Puente 1N5408 ×4 (o KBU8M), C 10.000 µF / 63 V, bleeder 10 k / 1 W
-- 0,1 µF en la entrada del regulador (§8.4.1)
-- **LM317HV en TO-220**, con disipador de ≤2 °C/W y aislador de mica
-- R1 = 120 Ω (fija 10,4 mA de carga mínima permanente)
-- R2 = pote 3k9 / 1 W (disipa 0,42 W a fondo de escala)
-- C_ADJ = 10 µF tántalo, C_OUT = 10 µF tántalo
-- D_ADJ 1N4148 (ADJ→OUT), D_IN 1N5408 (OUT→IN), D_REV 1N5408 (masa→OUT)
-- Fusible de primario
+## Qué se conserva
 
-**Control**
-- Shunt 0,33 Ω / 1 W en el retorno, filtro 1 k / 100 nF
-- TL431 + 2k2 → referencia de 2,5 V
-- LM358 (medio), integrador 10 k / 1 µF → esquina a 16 Hz
-- Consigna de corriente: 22 k + pote 4k7
-- NPN pequeño (BC547/2N3904) + 4k7 y 10 k de base
+OVP con seguimiento, OTP, latch, POR, disyuntor serie M4, lazo de corriente
+constante, control de ventilador y las protecciones de un diodo (D4, D15,
+D17, D16).
 
-**Auxiliar**
-- Transformador pequeño de 1,5 VA / 12 V + puente + 7812 → **+12 V** para el
-  control. No se puede sacar del raíl principal: entre TAP=1 y TAP=3 va de 16
-  a 50 V, y un resistor+zener dimensionado para dar corriente a 16 V disiparía
-  ~2,4 W a 50 V.
+## Recalibraciones
+
+| | de | a | por qué |
+|---|---|---|---|
+| R16 | 220 Ω | **100 Ω** | corriente mínima de carga: el datasheet pide hasta 12 mA a 60 V de diferencial y 220 Ω solo daban 5,7 mA. Ahora 12,5 mA. R17 (pote) se escala de 5 kΩ a 2,2 kΩ para mantener el rango |
+| R46 | 39 kΩ | **27 kΩ** | sin el raíl negativo la salida sube 1,25 V para la misma consigna; el margen del OVP caía de 3,2 V a 1,8 V |
+| R23 | 9 kΩ | **24 kΩ** | el CC estaba a 2,5 A, por encima de lo que da el regulador. Ahora 1,0 A |
+| R57 | 18 kΩ | **27 kΩ** | OTP de 89,3 → 67,6 °C: todo el calor pasa ahora por una sola lengüeta |
 
 ## Medido en simulación
 
-Reproducible con `python3 tools/ltspice/verify_psu_simple.py`.
+| toma | VRAW+ | salida en regulación | corto: Vin−Vout / I |
+|---|---|---|---|
+| TAP=1 | 16,0 V | 1,25 – 14,1 V | 12,1 V / 2,19 A |
+| TAP=2 | 33,3 V | 1,25 – 30,5 V | 28,5 V / 1,63 A |
+| TAP=3 | 50,4 V | 1,25 – 30,6 V (techo del pote) | 47,5 V / 0,83 A |
 
-**Tensión.** `Vout = 1,25·(1 + R2/120) + Iadj·R2`. Linealidad dentro del 0,9 %
-del valor teórico en todo el recorrido del pote.
+`VLOAD = 5,839·Vcontrol + 1,261`. CC a 1,005 A con carga resistiva. OVP
+dispara 20 µs tras un corto entrada-salida del regulador, enclava y corta M4.
+Margen del OVP: 3,2 V por encima de la nominal en las tres tomas.
 
-| toma | VRAW+ | Vout máx |
-|---|---|---|
-| TAP=1 | 16,5 V | 14,5 V |
-| TAP=2 | 33,3 V | 31,3 V |
-| TAP=3 | 49,9 V | 41,7 V (tope del pote) |
+## Tres cosas que hay que saber
 
-**Regulación de carga y rizado** (TAP=2, 21,5 V):
+**El techo de 30,6 V lo pone el pote, no el transformador.** `Vout = 1,25·(1 +
+R17/R16)`, y con R17 topando en 2,35 kΩ sobre R16 = 100 Ω salen 30,6 V en
+cualquier toma. Aun así TAP=3 no sobra: es lo que permite tener 30 V **con
+corriente**. Medido a consigna máxima:
 
-| carga | I | Vout | desviación | rizado |
+| toma | carga | VLOAD | rizado | margen |
 |---|---|---|---|---|
-| 1000 Ω | 21 mA | 21,489 V | — | 0,06 mV |
-| 22 Ω | 0,962 A | 21,481 V | −0,034 % | 0,83 mV |
+| TAP=2 | 0,3 A | 30,51 V | 1 mV | 2,6 V |
+| TAP=2 | 1,0 A | **28,74 V** | **653 mV** | 1,8 V — en dropout |
+| TAP=3 | 0,3 A | 30,56 V | 1 mV | 19,7 V |
+| TAP=3 | 1,0 A | **30,55 V** | 2 mV | 15,9 V |
 
-**Corriente.** Error 0,0 % en todo el recorrido del pote:
+Para llegar de verdad a los ~47 V que da TAP=3 hace falta un pote de 3k9
+(R17 = 780·Vcontrol) **y recalibrar a la vez el divisor de seguimiento del
+OVP**, que está atado a la pendiente consigna→salida: solo con el pote más
+grande, el OVP enclava nada más arrancar. Los valores que lo dejan con 3,5 V
+de margen plano en todo el rango son **R38 10k → 4k3** y **R46 27k → 18k**.
 
-| pote | consigna | medido |
-|---|---|---|
-| 5 % | 80,3 mA | 80,3 mA |
-| 20 % | 311,2 mA | 311,3 mA |
-| 70 % | 988,1 mA | 988,1 mA |
-| 100 % | 1337,0 mA | 1337,1 mA |
-
-Transición CV→CC limpia: con 21,5 V pedidos y el límite a 1,34 A, entra en CC
-por debajo de 16 Ω de carga.
-
-**Cortocircuito franco** (0,2 Ω, 5 s):
-
-| toma | Vin−Vout | I | P | Tj |
-|---|---|---|---|---|
-| TAP=1 | 11,8 V | 2,19 A | 25,8 W | 111 °C |
-| TAP=2 | 28,2 V | 1,64 A | 46,1 W | 163 °C → corta el apagado térmico |
-| TAP=3 | 47,3 V | 0,84 A | 39,6 W | 147 °C → corta el apagado térmico |
-
-Ningún diferencial pasa de los 60 V del máximo absoluto. §8.3.2 avisa de que
-superarlos destruye el chip, y en TO-220 lo típico es que reviente el
-encapsulado.
-
-## Cuatro cosas que hay que saber
-
-**El límite de corriente tiene un suelo de 1,25 V.** El NPN no puede llevar
-ADJ por debajo de masa, así que la salida no baja de ~1,35 V. El límite se
-respeta mientras la carga permita esa tensión, o sea **Rcarga > 1,35 V /
-Iset**. Por debajo (un corto franco) el lazo se satura y toma el relevo el
-limitador interno del chip, que además se pliega con el diferencial: 2,2 A
-con Vin−Vout ≤ 15 V y 0,3 A a 60 V (tabla 7.5). Es la consecuencia directa de
-no tener referencia negativa.
-
-**Elige la toma por disipación, no por tensión.** Es lo único que hace el
-selector manual. Regla para quedarse por debajo de ~15 W a 1 A con un
-disipador de 2 °C/W: TAP=1 para 1,25–14 V, TAP=2 para 14–31 V, TAP=3 para
-31–42 V. Con la toma equivocada (salida baja, toma alta) el TO-220 disipa
-40 W y acaba cortando por temperatura.
+**El CC perdió el suelo.** Sin el raíl negativo, Q2 no puede llevar `Vadj` por
+debajo de masa y la salida no baja de ~1,3 V. El lazo solo regula mientras
+`Rcarga > 1,3 V / I_límite`; por debajo actúa el limitador interno del
+regulador, que además se pliega con el diferencial (2,2 A a 15 V, 0,3 A a
+60 V, tabla 7.5 del datasheet).
 
 **El selector tiene que ser break-before-make.** Uno make-before-break
-cortocircuita un devanado al pasar de posición. Conmuta con la salida
-descargada: cortar 160 mH con corriente hace arco en los contactos.
+cortocircuita un devanado al pasar de posición. Queda un único snubber RC en
+la entrada del puente en vez de los tres por devanado, así que conmuta con la
+salida descargada: cortar 160 mH con corriente hace arco.
 
-**No hay OVP.** Si el regulador falla en corto, la carga ve el raíl entero
-(hasta 50 V). Es el único modo de fallo que no cubre nada, y las protecciones
-nativas del chip no lo cubren por definición. Si en algún momento quieres
-taparlo, lo clásico son tres componentes: zener + SCR + fusible.
+## LM317HV.sub
 
-## Notas de simulación
+`LT317A.sub`, el modelo que trae LTspice, viene cifrado y —siendo la pieza de
+40 V— **deja de regular por encima de esa tensión**: con 50 V de entrada saca
+2,98 V en vez de 1,25, y 9,4 V con carga ligera. Cualquier simulación de la
+toma alta con él da resultados falsos.
 
-**El netlist lleva `uic` a propósito.** Sin él el `.op` no converge: fallan
-Gmin stepping y source stepping, el pseudo-transitorio "encuentra" un punto
-que sale NaN y el transitorio entero hereda el NaN. Lo que lo hace
-irresoluble es el lazo de CC colgado del pin ADJ. Con `uic` + `startup` se
-arranca de cero con las fuentes en rampa, que es además lo que pasa de verdad
-al dar tensión.
+`LM317HV.sub` es un modelo conductual escrito a partir de TI SNVS773D rev D:
+Vref 1,25 V, 50 µA en ADJ, dropout ~2 V, y límite de corriente con plegado SOA
+interpolado entre los dos puntos que da la tabla 7.5. Contrastado contra
+LT317A donde LT317A es válido (Vin < 40 V) coincide dentro del 1 %.
 
-**Para medir CC hace falta margen de raíl.** Si la consigna de tensión está
-por encima de lo que da la toma, el regulador está en dropout y el lazo de
-corriente ni se activa: se mide la carga, no el límite.
-
-**`LM317HV.sub`** es un modelo conductual escrito a partir del datasheet,
-porque el `LT317A.sub` que trae LTspice viene cifrado y, siendo la pieza de
-40 V, deja de regular por encima (con 50 V de entrada saca 2,98 V en vez de
-1,25). Contrastado contra LT317A donde LT317A es válido coincide dentro del
-1 %. No modela el apagado térmico, así que `V(Tj)` es informativo. Su ancho de
-banda limita el rechazo de rizado medido a 55–58 dB; el real son 80 dB con los
-10 µF en ADJ (§8.4.2).
-
-**`LM358.sub`** también es conductual. Se usa en vez del OP747 de `ADI.lib`
-porque la pieza que pide el diseño es un LM358 (alimentación simple, modo
-común de entrada que incluye masa) y porque el macromodelo del OP747 no
-converge en este circuito. No modela el offset de entrada: con los 2–7 mV
-típicos del LM358 real, a 80 mA de consigna (26 mV en el shunt) cuenta con un
-error del 8–25 %. Si quieres precisión en el extremo bajo, pon un OP07.
+No modela apagado térmico, corriente mínima de carga, deriva con temperatura
+ni ruido. Su lazo es más lento que el real, así que muestra un pico de arranque
+de ~4,7 V a consigna mínima que la pieza real no tiene; no llega a enclavar el
+OVP, pero no te fíes de ese transitorio.

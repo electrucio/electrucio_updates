@@ -4,8 +4,9 @@ El diseño original. Fuente lineal ajustable con LM317, par de transistores de
 paso 2N3055, conmutación automática de tomas del secundario por relés,
 limitación de corriente en lazo cerrado y un bus de fallo enclavado.
 
-Se conserva tal cual como referencia. Las simplificaciones viven en
-[`../psu_simple/`](../psu_simple/).
+Se conserva tal cual como referencia. Los otros dos diseños de la serie son
+[`../psu_simple/`](../psu_simple/) (una poda de este) y
+[`../psu_cvcc/`](../psu_cvcc/) (hecho desde cero, el que se va a construir).
 
 Fuente de verdad: `psu.asc` (GUI de LTspice). `psu.net` se exporta con
 `File > Export Netlist` o `LTspice -netlist psu.asc`.
