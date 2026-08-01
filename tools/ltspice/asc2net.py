@@ -118,9 +118,11 @@ class Union:
 
 def parse_asc(path: Path):
     """Devuelve (wires, flags, instancias, directivas)."""
-    txt = path.read_bytes()
-    txt = (txt.decode("utf-16-le", "replace") if txt[:2] == b"\xff\xfe"
-           else txt.decode("utf-8", "replace"))
+    blob = path.read_bytes()
+    if blob[:2] in (b"\xff\xfe", b"V\x00") or blob.count(b"\x00") > len(blob) // 4:
+        txt = blob.decode("utf-16-le", "replace").lstrip("\ufeff")
+    else:
+        txt = blob.decode("utf-8", "replace")
     wires, flags, insts, directives = [], [], [], []
     cur = None
     for raw in txt.splitlines():
@@ -221,9 +223,12 @@ def norm_value(v: str) -> str:
 
 
 def parse_net(path: Path):
-    txt = path.read_bytes()
-    txt = (txt.decode("utf-16-le", "replace") if txt[:2] == b"\xff\xfe"
-           else txt.decode("utf-8", "replace"))
+    # LTspice escribe los netlists en UTF-16LE y no siempre con BOM
+    blob = path.read_bytes()
+    if blob[:2] in (b"\xff\xfe", b"*\x00") or blob.count(b"\x00") > len(blob) // 4:
+        txt = blob.decode("utf-16-le", "replace").lstrip("\ufeff")
+    else:
+        txt = blob.decode("utf-8", "replace")
     out = {}
     for raw in txt.splitlines()[1:]:
         line = raw.split(";")[0].strip()
