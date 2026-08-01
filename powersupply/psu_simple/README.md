@@ -43,7 +43,7 @@ D17, D16).
 |---|---|---|---|
 | TAP=1 | 16,0 V | 1,25 – 14,1 V | 12,1 V / 2,19 A |
 | TAP=2 | 33,3 V | 1,25 – 30,5 V | 28,5 V / 1,63 A |
-| TAP=3 | 50,4 V | 1,25 – 30,6 V | 47,5 V / 0,83 A |
+| TAP=3 | 50,4 V | 1,25 – 30,6 V (techo del pote) | 47,5 V / 0,83 A |
 
 `VLOAD = 5,839·Vcontrol + 1,261`. CC a 1,005 A con carga resistiva. OVP
 dispara 20 µs tras un corto entrada-salida del regulador, enclava y corta M4.
@@ -51,9 +51,23 @@ Margen del OVP: 3,2 V por encima de la nominal en las tres tomas.
 
 ## Tres cosas que hay que saber
 
-**TAP=3 no aporta nada tal como está.** El pote llega a 2,35 kΩ, que topa la
-salida en 30,6 V — lo mismo que da TAP=2. La tercera toma solo añade
-disipación. Para aprovecharla harían falta ~3,9 kΩ de pote (≈48 V de salida).
+**El techo de 30,6 V lo pone el pote, no el transformador.** `Vout = 1,25·(1 +
+R17/R16)`, y con R17 topando en 2,35 kΩ sobre R16 = 100 Ω salen 30,6 V en
+cualquier toma. Aun así TAP=3 no sobra: es lo que permite tener 30 V **con
+corriente**. Medido a consigna máxima:
+
+| toma | carga | VLOAD | rizado | margen |
+|---|---|---|---|---|
+| TAP=2 | 0,3 A | 30,51 V | 1 mV | 2,6 V |
+| TAP=2 | 1,0 A | **28,74 V** | **653 mV** | 1,8 V — en dropout |
+| TAP=3 | 0,3 A | 30,56 V | 1 mV | 19,7 V |
+| TAP=3 | 1,0 A | **30,55 V** | 2 mV | 15,9 V |
+
+Para llegar de verdad a los ~47 V que da TAP=3 hace falta un pote de 3k9
+(R17 = 780·Vcontrol) **y recalibrar a la vez el divisor de seguimiento del
+OVP**, que está atado a la pendiente consigna→salida: solo con el pote más
+grande, el OVP enclava nada más arrancar. Los valores que lo dejan con 3,5 V
+de margen plano en todo el rango son **R38 10k → 4k3** y **R46 27k → 18k**.
 
 **El CC perdió el suelo.** Sin el raíl negativo, Q2 no puede llevar `Vadj` por
 debajo de masa y la salida no baja de ~1,3 V. El lazo solo regula mientras
