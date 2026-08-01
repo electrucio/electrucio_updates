@@ -18,6 +18,15 @@
 *   9. M4 was an IRF4905 (55 V) on a rail that reaches 54 V no-load whenever
 *      the breaker is off - 98 % of rating, on every power-down with the knob
 *      up.  Now an IRF9540N (100 V); costs 0.23 V of drop, 0 V of margin.
+*  10. A sustained short used to sit on the pass bank for 10.6 s waiting for
+*      the heatsink to notice - at or past the derated SOA of a 2N3055.
+*      Fixed the simple way: do not make the bank SURVIVE the fault, do not
+*      let the fault LAST.  U15/U17 trip the existing latch after 300 ms of
+*      sustained overcurrent.  Exposure 10.6 s -> 300 ms, which is inside the
+*      2N3055 pulsed SOA with margin.  CC limit raised 2.5 -> 2.9 A so the
+*      trip threshold (2.7 A) has room above the 2.4 A rated load.
+*      Base stoppers are per-device (R29A/R29B) in case faster devices are
+*      fitted later - fast devices in parallel can oscillate against each other.
 *
 * Verified headless (LTspice -b).  See psu_test_fanfail.net for the OTP test.
 * NOTE: .lib paths are absolute because the CLI does not search the LTspice
@@ -135,14 +144,18 @@ R55 Q7_B 0 10k
 R28 N026 PASS_IN 10
 XU1 Vadj VLOAD N026 LT317A
 Q4 N022 N026 PASS_IN 0 BD140
-R29 N006 N022 10
 R21 VLOAD N006 220
+* resistencia de base INDIVIDUAL por dispositivo (antes una compartida de 10R):
+* frena oscilaciones parasitas entre transistores rapidos en paralelo
+R29A N006 N022 10
+R29B N006B N022 10
 Q1 PASS_IN N006 N013 0 2N3055
 R19 VLOAD N013 0.47
-Q3 PASS_IN N006 N012 0 2N3055
+Q3 PASS_IN N006B N012 0 2N3055
 R20 VLOAD N012 0.47
+R21B VLOAD N006B 220
 * per-device SOA backstop: steals base drive above ~1.4 A per 3055
-Q5 N006 N012 VLOAD 0 2N2222
+Q5 N006B N012 VLOAD 0 2N2222
 C1 VLOAD N012 220n
 D15 VLOAD PASS_IN 1N5408
 * output network
@@ -170,7 +183,7 @@ D17 Vadj VLOAD 1N4148
 R22 Vshunt 0 0.1
 R56 Vshunt ISENSE 1k
 C9 ISENSE 0 100n
-R23 2v5 CC_REF 9k
+R23 2v5 CC_REF 7k5
 R27 CC_REF 0 1k
 * R59+C12 = 1.5 ms integrator -> loop crosses over ~50 Hz, well under the
 * Cadj pole, so the limiter servos instead of chattering rail to rail
@@ -224,6 +237,21 @@ R61 OTP_REF 0 10k
 XU13 OTP_REF Tsense VCC 0 FAULTn LM339
 
 **********************************************************************
+* DISPARO POR SOBRECORRIENTE SOSTENIDA  (disyuntor)
+*   No intentamos que el banco AGUANTE la falta: no dejamos que dure.
+*   carga nominal 2.4 A  <  disparo 2.7 A  <  limite CC 2.9 A
+*   dispara el latch que ya existe (wired-OR sobre FAULTn, gratis).
+*   Un pico corto de corriente no dispara; un corto de verdad, si.
+**********************************************************************
+R73 2v5 ITRIP 8k2
+R74 ITRIP 0 1k
+XU15 ISENSE ITRIP VCC 0 NOC LM339
+R76 VCC NOC 10k
+R75 NOC NTRIP 470k
+C18 NTRIP 0 2.7u
+XU17 2v5 NTRIP VCC 0 FAULTn LM339
+
+**********************************************************************
 * THERMAL MODEL + PROPORTIONAL FAN
 **********************************************************************
 .global Tj
@@ -247,16 +275,18 @@ D19 FAN_HI VCC 1N4148
 * TEST STIMULUS
 **********************************************************************
 * setpoint: 0 -> 5 V (= 0 -> 28.4 V out) between 0.5 s and 2.0 s
-*   0.5-2.0 s  setpoint 0 -> 28.4 V      2.0-3.0 s  12 ohm (2.4 A)
-*   3.0-4.0 s  2 ohm  -> CC limit          4.5-4.8 s  dead short
-*   5.2-5.6 s  setpoint back to 5.7 V      5.8 s      Q3 collector-emitter short
-V2 VCTRL 0 PWL(0 1m 0.5 1m 2.0 5 5.2 5 5.6 1 9 1)
-V4 RSET 0 PWL(0 500 1.99 500 2.0 12 2.99 12 3.0 2 3.99 2 4.0 12 9 12)
+*   0.5-2.0 s  setpoint 0 -> 29 V          2.0-3.0 s  12 ohm (2.4 A)
+*   3.0-3.15 s 2 ohm, 150 ms  -> CC limita y RECUPERA (bajo el umbral de 300 ms)
+*   4.5-4.65 s corto franco 150 ms -> idem
+*   5.2-5.6 s  consigna a 5.7 V           5.8 s  corto C-E de Q3 -> OVP enclava
+*   El disparo por sobrecorriente sostenida se prueba en psu_test_short.net
+V2 VCTRL 0 PWL(0 1m 0.5 1m 2.0 5 9 5)
+V4 RSET 0 PWL(0 500 1.99 500 2.0 12 9 12)
 Rload N027 Vshunt R=V(RSET)
 S2 VLOAD Vshunt NSHORT 0 MYSW
-V7 NSHORT 0 PULSE(0 12 4.5 10u 10u 0.3 100 1)
+V7 NSHORT 0 PULSE(0 12 3.0 10u 10u 10 100 1)
 S1 N012 PASS_IN N011 0 MYSW
-V5 N011 0 PULSE(0 12 5.8 10u 10u 3 100 1)
+V5 N011 0 PULSE(0 12 99 10u 10u 3 100 1)
 
 **********************************************************************
 * MODELS
@@ -325,10 +355,10 @@ C2 N010 N011 20p
 .lib LM339.sub
 .lib Relay_2A2B.sub
 
-.ic V(POR)=0
+.ic V(POR)=0 V(NTRIP)=0
 .options reltol=1e-3 abstol=1u vntol=1u trtol=1 method=trap plotwinsize=0
-.tran 0 7.0 0 2m startup
-.save V(VLOAD) V(VRAW+) V(Vadj) V(VCTRL) V(PASS_IN) V(M4_G) V(FAULTn) V(VSENSE) V(VREF_OV)
+.tran 0 5 0 2m startup
+.save V(NOC) V(NTRIP) V(VLOAD) V(VRAW+) V(Vadj) V(VCTRL) V(PASS_IN) V(M4_G) V(FAULTn) V(VSENSE) V(VREF_OV)
 .save V(LATCH) V(LATCH_IN) V(Vshunt) V(Tj) V(Tsense) V(RELAY2) V(RELAY3) V(CC_OUT) V(GATE_DRV)
 .save V(LATCH_B) V(CC_B) V(CC_IN) V(ISENSE) V(POR) V(fan_drive) V(FAN_HI) V(RSET) V(2v5) V(VNEG) I(R22) I(RF4) I(R19) I(R20)
 .end
