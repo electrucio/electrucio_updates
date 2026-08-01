@@ -1,0 +1,24 @@
+Version 4
+SymbolType CELL
+LINE Normal 0 -64 0 -16
+LINE Normal 0 64 0 16
+LINE Normal -32 -16 32 -16
+LINE Normal -32 16 32 16
+LINE Normal -32 16 0 -16
+LINE Normal 32 16 0 -16
+LINE Normal -48 40 -32 40
+LINE Normal -32 40 -32 16
+WINDOW 0 40 -32 Left 2
+WINDOW 3 40 0 Left 2
+SYMATTR Value TL431ED
+SYMATTR Prefix X
+SYMATTR Description Referencia ajustable de 2,5 V
+PIN 0 -64 NONE 0
+PINATTR PinName CATHODE
+PINATTR SpiceOrder 1
+PIN 0 64 NONE 0
+PINATTR PinName ANODE
+PINATTR SpiceOrder 2
+PIN -48 40 NONE 0
+PINATTR PinName REF
+PINATTR SpiceOrder 3

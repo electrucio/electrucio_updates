@@ -124,6 +124,29 @@ descargada: cortar 160 mH con corriente hace arco en los contactos.
 nativas del chip no lo cubren por definición. Si en algún momento quieres
 taparlo, lo clásico son tres componentes: zener + SCR + fusible.
 
+## Esquemático
+
+`psu_cvcc.asc` genera un netlist equivalente a `psu_cvcc.net`: mismos 68
+componentes, mismos nodos, mismos valores, y la simulación coincide hasta
+1e-4. Trae sus tres símbolos (`LM317HV.asy`, `LM358.asy`, `TL431ED.asy`).
+
+Está conectado por **etiquetas de red**, no por hilos largos: cada pin lleva
+un tramo corto y una etiqueta. Es feo comparado con un esquemático routeado a
+mano, pero no tiene cruces y el netlist que sale es inequívoco. Reordenar los
+bloques en la GUI es trivial y no cambia el netlist.
+
+**En este equipo `LTspice -netlist psu_cvcc.asc` no funciona**: abre ventana y
+se queda ahí, y lo mismo pasa con `psu_overengineered/psu.asc`, que la GUI
+abre sin problema. O sea que es el binario, no el fichero. Para netlistar sin
+GUI está `tools/ltspice/asc2net.py`, que además compara contra un netlist de
+referencia:
+
+```bash
+python3 tools/ltspice/asc2net.py powersupply/psu_cvcc/psu_cvcc.asc --diff powersupply/psu_cvcc/psu_cvcc.net
+```
+
+Desde la GUI, `File > Export Netlist` sigue funcionando.
+
 ## Notas de simulación
 
 **El netlist lleva `uic` a propósito.** Sin él el `.op` no converge: fallan
