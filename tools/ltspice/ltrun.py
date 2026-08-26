@@ -78,6 +78,23 @@ class Netlist:
         self.text = self.text.replace(old, new)
         return self
 
+    def drop_re(self, pattern: str, min_count: int = 1) -> "Netlist":
+        """Borra las lineas que casan `pattern`. Revienta si casan menos de `min_count`.
+
+        Para tirar bloques enteros de directivas (`.meas tran`, `.four`) cuando se
+        cambia el tipo de analisis. Como `patch()`, falla a gritos: si el
+        esquematico deja de tener esas lineas, se nota aqui.
+        """
+        rx = re.compile(pattern, re.I)
+        kept = [l for l in self.text.splitlines(True) if not rx.match(l)]
+        n = len(self.text.splitlines(True)) - len(kept)
+        if n < min_count:
+            raise AssertionError(
+                f"drop_re: {pattern!r} casa {n} lineas, esperaba >= {min_count}"
+                + (f" en {self.origin}" if self.origin else ""))
+        self.text = "".join(kept)
+        return self
+
     def absolutize_libs(self, extra_dirs=()) -> "Netlist":
         """Convierte `.lib foo.sub` / `.include` relativos en rutas absolutas."""
         # absolutas siempre: el .net se simula con cwd en su propio directorio,
