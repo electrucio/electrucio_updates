@@ -19,6 +19,11 @@ __pycache__/
 *.tmp
 *.bak
 
+# KiCad: .kicad_prl son los ajustes LOCALES del proyecto (capa activa, modo de
+# alto contraste, opacidades, filtro de seleccion). Es estado de interfaz por
+# usuario y por maquina, no diseno.
+*.kicad_prl
+
 # LTspice sobrescribe este netlist al abrir el .asc; el .asc es la fuente
 powersupply/psu_cvcc/psu_cvcc.net
 powersupply/psu_cvcc/psu_cvcc.log
