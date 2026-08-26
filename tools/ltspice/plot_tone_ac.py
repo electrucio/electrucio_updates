@@ -45,8 +45,8 @@ from verify_tone_ac import Bench, db                      # noqa: E402
 
 POS = (0.0, 0.25, 0.5, 0.75, 1.0)
 SWEEP = ".ac dec 60 5 2Meg"
-F_LO, F_HI = 10.0, 1e5             # ventana de la figura
-DB_LO, DB_HI = -20.0, 45.0
+F_LO, F_HI = 10.0, 1e6             # ventana de la figura
+DB_LO, DB_HI = -30.0, 45.0
 
 # TREBLE es una variable ORDINAL, asi que la rampa va ordenada (frio -> caliente)
 # y desaturada, para que parezca instrumento y no arcoiris.
@@ -126,6 +126,8 @@ class Ax:
 
 
 def fmt_hz(f):
+    if f >= 1e6:
+        return f"{f/1e6:g}M"
     return f"{f/1000:g}k" if f >= 1000 else f"{f:g}"
 
 
@@ -168,10 +170,17 @@ def grid(ax, pal):
 
 
 def legend(ax, pal, colors):
-    """Recuadro dentro del grafico, arriba a la izquierda (zona vacia)."""
-    x, y, w, h = ax.x0 + 16, ax.y0 + 16, 392, 70
+    """Recuadro dentro del grafico, abajo a la izquierda.
+
+    Va ahi y no arriba porque con la ventana hasta 1 MHz la esquina superior
+    izquierda ya no esta libre: la curva bass=0 / treble=100 % sube hasta
+    +34.9 dB por debajo de los 750 Hz y el recuadro la tapaba.  Relleno opaco,
+    para que no atenue nada si algun dia vuelve a solaparse.
+    """
+    w, h = 392, 70
+    x, y = ax.x0 + 16, ax.y0 + ax.h - 16 - h
     g = [f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{pal["bg"]}" '
-         f'fill-opacity="0.88" stroke="{pal["grid"]}"/>']
+         f'stroke="{pal["grid"]}"/>']
     for r, (kind, label) in enumerate((("t", "TREBLE"), ("b", "BASS"))):
         ry = y + 25 + r * 28
         g.append(f'<text x="{x+12}" y="{ry+4}" class="lgl">{label}</text>')
@@ -191,31 +200,22 @@ def legend(ax, pal, colors):
 
 def build_svg(data, pal, colors, width=1240):
     M = data["meta"]
-    ax = Ax(110, 126, width - 110 - 42, 566)
-    height = 828
+    ax = Ax(110, 60, width - 110 - 42, 566)
+    height = 700
     s = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" '
          f'width="100%" style="display:block;width:100%;height:auto" role="img" '
          f'aria-label="Small-signal frequency response of a 40 W guitar amplifier '
          f'for 25 combinations of bass and treble control position">']
     s.append(f'''<style>
-    .h1{{font:600 28px "IBM Plex Sans Condensed","IBM Plex Sans",sans-serif;fill:{pal['ink']}}}
-    .sub{{font:400 15.5px "IBM Plex Sans",system-ui,sans-serif;fill:{pal['muted']}}}
     .cond{{font:400 12.5px "IBM Plex Mono",ui-monospace,monospace;fill:{pal['muted']};letter-spacing:.06em}}
     .tick{{font:400 14px "IBM Plex Mono",ui-monospace,monospace;fill:{pal['muted']};font-variant-numeric:tabular-nums}}
     .axl{{font:500 13px "IBM Plex Mono",ui-monospace,monospace;fill:{pal['ink']};letter-spacing:.12em}}
     .lgl{{font:500 12px "IBM Plex Mono",ui-monospace,monospace;fill:{pal['muted']};letter-spacing:.1em}}
     .lgv{{font:400 12.5px "IBM Plex Mono",ui-monospace,monospace;fill:{pal['ink']};font-variant-numeric:tabular-nums}}
-    .cap{{font:400 13.5px "IBM Plex Sans",system-ui,sans-serif;fill:{pal['muted']}}}
-    .cap tspan{{font-weight:600;fill:{pal['ink']}}}
     </style>''')
 
     # ---- cabecera
-    s.append('<text x="110" y="46" class="h1">Frequency response vs. bass and '
-             'treble control position</text>')
-    s.append('<text x="110" y="73" class="sub">40 W quasi-complementary guitar '
-             'amplifier &#8212; preamp + power stage, |V(SPEAKER)/V(PICKUP_OUT)| '
-             'into 7.5 &#937; resistive. Pickup and speaker model excluded.</text>')
-    s.append(f'<text x="110" y="100" class="cond">DRIVE 0% &#183; VOLUME 100% '
+    s.append(f'<text x="110" y="32" class="cond">DRIVE 0% &#183; VOLUME 100% '
              f'&#183; RAIL 48.88 V &#183; TNOM 27 &#176;C &#183; '
              f'{M["sweep"].replace(".ac ", "").upper()} &#183; '
              f'LTSPICE 17.2.4 BATCH</text>')
@@ -243,21 +243,6 @@ def build_svg(data, pal, colors, width=1240):
              f'transform="rotate(-90 44 {cy:.0f})">GAIN (dB)</text>')
     s.append(f'<text x="{ax.x0+ax.w/2:.0f}" y="{ax.y0+ax.h+48}" class="axl" '
              f'text-anchor="middle">FREQUENCY (Hz)</text>')
-
-    # ---- pie: solo hechos
-    hi3 = (f'&#8722;3 dB (re 1 kHz) at '
-           f'<tspan>{M["f_hi_3db"]/1000:.0f} kHz</tspan>'
-           if M["f_hi_3db"] else 'no HF corner within the sweep')
-    s.append(f'<line x1="110" y1="{height-66}" x2="{ax.x0+ax.w}" '
-             f'y2="{height-66}" stroke="{pal["grid"]}"/>')
-    s.append(f'<text x="110" y="{height-44}" class="cap">Both controls at 50%: '
-             f'<tspan>{M["db_1k"]:+.1f} dB</tspan> at 1 kHz, peak '
-             f'<tspan>{M["peak_db"]:+.1f} dB</tspan> at '
-             f'<tspan>{M["peak_hz"]/1000:.0f} kHz</tspan>, {hi3}.</text>')
-    s.append(f'<text x="110" y="{height-22}" class="cap">The dip near 200 Hz is '
-             f'the tone stack&#8217;s mid scoop, fixed by R44 = 100 &#937; '
-             f'&#8212; not a band limit. Small-signal AC analysis: the diode '
-             f'clipper at TONE_IN is linearised and off.</text>')
 
     s.append("</svg>")
     return "".join(s), {
