@@ -40,8 +40,13 @@ Ojo tambien:
 4. El .ac es PEQUENA SENAL: los diodos D5..D9 del recortador se linealizan (en
    reposo estan en corte, no molestan), pero esto no dice NADA del caracter de
    recorte.  Para eso, .tran.
-5. No hay pote de medios: R44 = 100 Ohm fijo.  Es un Marshall con el mid a cero,
-   asi que el scoop es profundo y no ajustable.  La tabla lo cuantifica.
+5. No hay pote de medios, y el scoop lo fija C20 (470n), no R44.  Barriendo
+   cada componente: R44 de 100 a 2200 ohm mueve 0.02 dB (es irrelevante, la
+   rama de C20 shunta en paralelo y domina), mientras que C20 de 47n a 1u lleva
+   el scoop de 0 a 22.6 dB.  El elemento de medios de esta stack es un
+   CONDENSADOR a masa, no la resistencia de mid de una FMV clasica.
+6. Todo lo que mide esta suite es con drive=0, que es la ganancia MINIMA: el
+   pote de drive (XP4) da +18.6 dB mas a 1 kHz.
 
 La fuente de verdad es `AudioAmpCompl-40W.net`, exportado de la GUI, y NO esta
 versionado (esta en .gitignore, igual que psu_cvcc.net): en un clon limpio hay

@@ -213,6 +213,11 @@ ampli solo           +25.4 dB a 50 Hz, +17.3 dB a 200 Hz (el notch de la stack),
 recorrido de treble  -3.4 dB a 100 Hz, +38.4 dB a 5 kHz.  A treble=0 el ampli
                      rueda de verdad (-2.7 dB a 10 kHz); a treble=1, +40 dB
 recorrido de bass    +13.7 dB a 100 Hz, 0.0 dB a 5 kHz (no toca los agudos)
+recorrido de drive   +18.6 dB a 1 kHz (XP4, revlog de 1k en el emisor de Q8):
+                     +30.3 dB con el pote a cero, +48.9 dB a fondo.  OJO: todas
+                     las demas medidas de aqui son con drive=0, que es la
+                     ganancia MINIMA.  El recorte de la etapa de potencia
+                     (~20.9 Vp con el rail a 48.9 V) llega hacia drive=78 %.
 scoop de medios      148-302 Hz segun treble, hasta 22 dB bajo el estante de 5 kHz
 interaccion          la stack a 1 kHz va de -36.3 dB (bass=0/treble=0) a
                      -3.8 dB (bass=0/treble=1): los dos controles NO son
@@ -251,9 +256,48 @@ Dos cosas que salieron de aquí y **no** están resueltas en el esquemático:
    Lo único que limita la banda por arriba es el pickup. En un cuasi-complementario
    con `2SD896`/`2SB776` eso es un punto a mirar: margen de fase y filtrado de
    entrada.
-2. **No hay pote de medios**: `R44 = 100 Ω` fijo. Es un Marshall con el mid a
-   cero, así que el scoop es profundo y no ajustable — es la explicación de los
-   −10 dB que se come la stack.
+2. **No hay pote de medios, y el scoop lo fija `C20`, no `R44`.** Medido
+   barriendo cada componente por separado:
+
+   | componente | 100 Ω → 2.2 k / 47 n → 1 µ | efecto |
+   |---|---|---|
+   | `R44` (100 Ω) | 100 → 2200 Ω | **0.02 dB.** Irrelevante |
+   | `R45` (47 Ω) | 47 → 4700 Ω | +3.8 dB a 1 kHz, scoop igual |
+   | `C20` (470 n) | 47 n → 1 µ | **scoop de 0 a 22.6 dB**, notch ∅ → 146 Hz |
+   | `R43` (10 k) | 2.2 k → 22 k | ±5 dB a 100 Hz, notch 315 → 152 Hz |
+
+   O sea que el elemento de medios de esta stack es un **condensador** a masa
+   (`C20`, desde el nodo que une el extremo del pote de agudos con el cursor de
+   graves), no la resistencia de mid de una FMV clásica. `R44` queda enmascarada
+   porque la rama de `C20` shunta en paralelo con ella y domina.
+
+   Consecuencia práctica: **cambiar `R44` no da un control de medios.** Un pote
+   en serie con `C20` solo compra +2.6 dB a 1 kHz y 3.2 dB menos de scoop
+   (medido, 0 → 2.2 k), porque la rama del pote de graves hacia `R44` sigue
+   shuntando. Lo que sí voltea el carácter es el **valor de `C20`**: 150 n / 470 n
+   / 1 µ en un conmutador rotativo dan tres voces útiles sin ningún pote.
+
+3. **El pote de agudos funciona como control de volumen.** Con los agudos a
+   cero el nivel de 1 kHz se cae **23.8 dB**: no es «menos agudos», es «mucho
+   más bajo», y deja el mando inútil por debajo del 25 %. Pasa porque con el
+   cursor abajo la salida se apoya justo encima del shunt de `C20`. `R45` es el
+   suelo, y subirlo lo arregla:
+
+   | `R45` | treble=0 | treble=100 % | recorrido |
+   |---|---|---|---|
+   | 47 Ω (actual) | +12.4 dB | +36.2 dB | 23.8 dB |
+   | 1 k | +16.4 dB | +36.6 dB | 20.2 dB |
+   | **2.2 k** | **+22.3 dB** | +37.1 dB | **14.8 dB** |
+   | 4.7 k | +27.9 dB | +37.7 dB | 9.9 dB |
+
+   Con 2.2 k se recuperan 9.9 dB en el extremo malo y quedan 14.8 dB de
+   recorrido, más o menos lo que da un Marshall. Es cambiar una resistencia.
+
+4. **Ganancia unidad en el preamp con los mandos al centro y drive a cero:**
+   los +10.05 dB de la etapa 1 los cancelan exactos los −10.10 dB de la stack.
+   Es una coincidencia, no un margen: toda la ganancia vive en el pote de drive
+   y en la etapa de potencia, así que las tone controls no tienen holgura que
+   dar. Subir `R45` ataca justo esto.
 
 ## La suite de la fuente
 
