@@ -9,6 +9,9 @@ tools/ltspice/
 ├── rawread.py      lector de ficheros .raw (binarios, .tran y .ac)
 ├── ltrun.py        preparar un netlist y lanzar LTspice en batch
 ├── asc2net.py      netlistar un .asc sin abrir la GUI
+├── asc2svg.py      dibujar un .asc en SVG, para revisar la disposición
+├── mkasc_psu_cvcc.py    generar psu_cvcc.asc con una disposición de lectura
+├── simplify_psu.py      derivar psu_simple.net podando psu.net
 ├── verify_psu.py   suite de verificación de powersupply/psu_overengineered/psu.asc
 ├── verify_psu_cvcc.py   ídem de powersupply/psu_cvcc/
 ├── verify_tone_ac.py    barrido AC del 40W: respuesta vs bass/treble
