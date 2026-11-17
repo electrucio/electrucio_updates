@@ -3,8 +3,8 @@
 
 Injects into tools/xview_template.html:
   __SYMLIB__  LTspice .asy symbol geometries (std lib + repo-local symbols)
-  __ASC__     guitar_amplifier/ltspice/AudioAmpCompl-40W.asc (decoded)
-  __NET__     guitar_amplifier/ltspice/AudioAmpCompl-40W.net.txt (decoded)
+  __ASC__     guitar_amplifier/ltspice/quasimod_guitar_amplifier.asc (decoded)
+  __NET__     guitar_amplifier/ltspice/quasimod_guitar_amplifier.net.txt (decoded)
   __PCB__     tools/pcbdata.json (extracted from "poweramp BOM.html" ibom blob)
   __MAP__     LTspice node -> KiCad net table (from poweramp_net_mapping.md)
 """
@@ -56,8 +56,8 @@ def main():
     for p in glob.glob(os.path.join(ROOT, "guitar_amplifier/ltspice/*.asy")):
         lib[os.path.splitext(os.path.basename(p))[0]] = trim_asy(read_lt(p))
 
-    asc = read_lt(os.path.join(ROOT, "guitar_amplifier/ltspice/AudioAmpCompl-40W.asc"))
-    net = read_lt(os.path.join(ROOT, "guitar_amplifier/ltspice/AudioAmpCompl-40W.net.txt"))
+    asc = read_lt(os.path.join(ROOT, "guitar_amplifier/ltspice/quasimod_guitar_amplifier.asc"))
+    net = read_lt(os.path.join(ROOT, "guitar_amplifier/ltspice/quasimod_guitar_amplifier.net.txt"))
     pcb = json.load(open(os.path.join(ROOT, "tools/pcbdata.json")))
 
     tpl = open(os.path.join(ROOT, "tools/xview_template.html")).read()

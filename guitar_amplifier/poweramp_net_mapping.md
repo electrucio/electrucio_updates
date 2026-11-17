@@ -3,7 +3,7 @@
 Correlation between the power-amp PCB netlist (recovered from `poweramp BOM.html`,
 an InteractiveHtmlBom export with `--include-nets`, board "poweramp" dated
 2026-06-04) and the full-system LTspice netlist
-`guitar_amplifier/ltspice/AudioAmpCompl-40W.net` (pickup + preamp + PSU +
+`guitar_amplifier/ltspice/quasimod_guitar_amplifier.net` (pickup + preamp + PSU +
 power amp + speaker model).
 
 **Result: the power-amp block matches the PCB 1:1.** Same refs (Q1–Q7, R1–R19,

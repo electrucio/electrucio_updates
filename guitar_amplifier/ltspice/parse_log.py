@@ -7,7 +7,7 @@ gains in V/V and dB, output power, PSRR, hum, transient response,
 and consolidates findings into actionable warnings.
 
 Usage:
-    python3 parse_log.py [logfile]            # default: AudioAmpCompl-40W.log
+    python3 parse_log.py [logfile]            # default: quasimod_guitar_amplifier.log
     python3 parse_log.py path/to/sim.log
 """
 
@@ -549,7 +549,7 @@ def report(parsed):
 # ====================================================================
 
 if __name__ == "__main__":
-    log_file = sys.argv[1] if len(sys.argv) > 1 else "AudioAmpCompl-40W.log"
+    log_file = sys.argv[1] if len(sys.argv) > 1 else "quasimod_guitar_amplifier.log"
     parsed = parse_ltspice_log(log_file)
     if parsed:
         report(parsed)

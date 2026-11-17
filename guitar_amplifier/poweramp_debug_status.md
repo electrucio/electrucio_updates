@@ -1,6 +1,6 @@
 # Power amp — estado de depuración y puesta a punto
 
-Etapa de potencia de [AudioAmpCompl-40W](guitar_amplifier/ltspice/AudioAmpCompl-40W.asc)
+Etapa de potencia de [quasimod_guitar_amplifier](guitar_amplifier/ltspice/quasimod_guitar_amplifier.asc)
 (cuasi‑complementaria, single‑supply, salida acoplada por C10). PCB fresada en CNC,
 transistores/disipador reutilizados. Mapeo de nets en `poweramp_net_mapping.md`,
 visor en `poweramp_xview.html` (abre con `#net=NOMBRE`).

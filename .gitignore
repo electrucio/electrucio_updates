@@ -27,5 +27,5 @@ __pycache__/
 # LTspice sobrescribe este netlist al abrir el .asc; el .asc es la fuente
 powersupply/psu_cvcc/psu_cvcc.net
 powersupply/psu_cvcc/psu_cvcc.log
-guitar_amplifier/ltspice/AudioAmpCompl-40W.net
+guitar_amplifier/ltspice/quasimod_guitar_amplifier.net
 guitar_amplifier/ltspice/*.log

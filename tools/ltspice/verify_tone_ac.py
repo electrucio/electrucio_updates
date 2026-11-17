@@ -48,7 +48,7 @@ Ojo tambien:
 6. Todo lo que mide esta suite es con drive=0, que es la ganancia MINIMA: el
    pote de drive (XP4) da +18.6 dB mas a 1 kHz.
 
-La fuente de verdad es `AudioAmpCompl-40W.net`, exportado de la GUI, y NO esta
+La fuente de verdad es `quasimod_guitar_amplifier.net`, exportado de la GUI, y NO esta
 versionado (esta en .gitignore, igual que psu_cvcc.net): en un clon limpio hay
 que exportarlo una vez con `File > Export Netlist` antes de usar esto.
 
@@ -73,7 +73,7 @@ from rawread import read_log, read_raw                    # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 AMP = REPO / "guitar_amplifier" / "ltspice"
-NET = AMP / "AudioAmpCompl-40W.net"
+NET = AMP / "quasimod_guitar_amplifier.net"
 
 VRAW_DC = 48.88            # V, media del rail medida en el .tran de 4.2 s
 AC_SWEEP = ".ac dec 100 10 100k"
