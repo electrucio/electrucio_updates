@@ -16,6 +16,9 @@ tools/ltspice/
 ├── verify_psu_cvcc.py   ídem de powersupply/psu_cvcc/
 ├── verify_tone_ac.py    barrido AC del 40W: respuesta vs bass/treble
 ├── plot_tone_ac.py      la figura de ese barrido (PNG + SVG + JSON)
+├── verify_amp_tran.py   caracterización del 40W en el dominio del tiempo
+├── render_audio.py      pasar un WAV de guitarra por el amplificador simulado
+├── svgplot.py           primitivos de dibujo en SVG + rasterizado con Chrome
 └── README.md
 ```
 
@@ -36,7 +39,7 @@ python3 tools/ltspice/verify_psu.py --only thermal --workdir /tmp/psu --plot --k
 python3 tools/ltspice/ltrun.py powersupply/psu_overengineered/psu.net /tmp/mi_sim
 ```
 
-## Las cinco trampas del CLI
+## Las trece trampas
 
 Todas están ya resueltas dentro de `ltrun.py`, pero conviene conocerlas:
 
@@ -65,6 +68,69 @@ Todas están ya resueltas dentro de `ltrun.py`, pero conviene conocerlas:
    fuente de red no lleva especificación `AC`, o sea que es un corto a masa.
    `uic` **no** es una salida: es solo para `.tran`. Ver
    `verify_tone_ac.py`, que hace exactamente esto sobre el 40W.
+
+7. **Con `tstart`, LTspice guarda el tiempo RELATIVO a él** y pone el
+   desplazamiento en `Offset:` de la cabecera del `.raw`. Un
+   `.tran 0 4.6 3.75 20u` devuelve tiempos de 0 a 0.85: si no sumas el offset,
+   cualquier medida en tiempo absoluto sale desplazada **en silencio**.
+   `read_raw()` ya lo suma; era un fallo suyo hasta 2026-08-27.
+8. **Nada de medias, RMS ni FFT sobre las muestras crudas de un `.tran`.**
+   Están muestreadas de forma **no uniforme**: LTspice concentra puntos donde
+   la señal cambia deprisa, así que un `np.mean` o un
+   `sqrt(mean(y**2))` sobre ellas pesa de más esas zonas y el resultado depende
+   de cómo haya convergido el paso, no de la señal. Con esto medí potencias
+   **no monótonas** —620 mV de entrada daban menos potencia que 500— hasta que
+   comparé con el valor teórico de una senoide conocida: 14.26 V medidos contra
+   14.264 V esperados una vez remuestreado. `uniform()` en `verify_amp_tran.py`
+   hace el remuestreo; `harmonics()` y `spectrum()` ya lo llevan dentro.
+9. **El suelo de THD lo pone `reltol`.** Medido sobre una salida en clase A
+   pura (distorsión real ≈ 0): con el `reltol` por defecto el suelo es
+   **0.038 %**, y con `.options reltol=1e-5 vntol=1e-6 abstol=1e-12` baja a
+   **0.0038 %**. Cambiar el número de puntos de la FFT de 1024 a 32768, o el
+   paso máximo de 1 µs a 0.2 µs, **no mueve nada**. Por debajo de ~0.01 % no
+   hay que creerse ningún número.
+
+10. **Una senoide NO predice lo que hace una guitarra.** Es la trampa más cara
+    de todas, porque no falla: da un número correcto de otra cosa. Una senoide
+    tiene **3 dB** de factor de cresta y una grabación de guitarra **18 dB**, así
+    que al mismo pico la guitarra tiene **~15 dB menos de RMS**. Medido sobre
+    `dry_guitar_44100_selection.wav`: a "150 mVp" la senoide da 106 mV de RMS y
+    la guitarra 21.6 mV. Consecuencia práctica: un recortador de diodos que con
+    senoide de 300 mVp da 0.7 % de THD, con guitarra de 300 mVp de pico solo
+    conduce el **2.4 % del tiempo**. Si el objetivo es un nivel realista, hay
+    que fijar un **percentil de picos locales** (`.param in_amplitude` documenta
+    150 mVp de P90), no el pico absoluto: para el corte citado eso son 174 mVp
+    de pico absoluto, ganancia 0.537.
+11. **`.wave` recorta a ±1 V.** Es formato WAV: fondo de escala es 1.0.
+    Verificado con una senoide de 5 V, que sale a 1.000 pelada. Para escribir la
+    salida de un amplificador de ±22 V hay que dividir con una fuente
+    behavioural antes (`B_WOUT WOUT 0 V=V(SPEAKER)/32`) y multiplicar de vuelta
+    al leer. Sin eso el WAV es un cuadrado perfecto y parece que el circuito
+    distorsiona muchísimo. Ver `render_audio.py`.
+12. **El recorte de abajo tapa el carácter de arriba.** Con dos etapas no
+    lineales en serie, medir la de arriba con la de abajo saturada da la
+    diferencia equivocada. Medido en el 40W con senoide de 320 mVp, comparando
+    el retorno del recortador a masa contra el retorno por bias:
+
+    | `vol` | pico/techo | bias − gnd | sin diodos − gnd |
+    |---|---|---|---|
+    | 0.30 – 0.70 | 3 – 45 % | **+2.76 dB** | **+5.37 dB** |
+    | 0.85 | 86 % | +2.60 | +4.22 |
+    | 1.00 | 101 % | **+1.04** | **+1.49** |
+
+    La diferencia es constante hasta que el pico alcanza el techo del raíl, y
+    ahí se derrumba a un tercio. O sea que **el master por encima de 0.85 borra
+    el recorrido del preamp entero**. Para caracterizar el preamp hay que
+    dejarle margen a la etapa de potencia; para caracterizar la etapa de
+    potencia, inyectar en serie con `C1` (`inject_power_stage()`).
+13. **Los nombres de nodo del `.net` siguen al `.asc`, y cambian sin avisar.**
+    El 2026-08-27 el esquemático pasó de `D6 N022 0` a `D6 N019 N024` al añadir
+    el mod de bias (`C35`/`C36` de 10 µF y `R41`/`R63` de 2k2). Cualquier script
+    que parchee el recortador por nombre de nodo mide el circuito equivocado, o
+    peor: un modo que "no parchea nada" (el `gnd` de `verify_amp_tran.py`)
+    cambia de significado en silencio, porque "tal como está dibujado" ya no es
+    lo mismo. Los tres modos son ahora parches **explícitos**, y `Netlist.patch`
+    casca a gritos si no encuentra el texto. Es la única defensa.
 
 Extra: **la primera línea de un netlist SPICE es el título**, no una instrucción.
 Si escribes uno a mano, empieza con un comentario `*` o perderás el primer
@@ -154,6 +220,99 @@ transitorio de arranque y la medida no vale). Para lo demás —mínimos en vent
 deslizante, integrar tiempo por encima de un umbral, contar transiciones de
 relé, KCL en un nodo, RMS en ventana— sale antes con numpy sobre el `.raw`.
 
+## La suite transitoria del 40W: `verify_amp_tran.py`
+
+Lo que el `.ac` no puede ver: recorte, distorsión, estabilidad y sag. Cinco
+casos, **90 s la suite entera**.
+
+```bash
+python3 tools/ltspice/verify_amp_tran.py --plot -o /tmp/fig
+python3 tools/ltspice/verify_amp_tran.py --only trim
+python3 tools/ltspice/verify_amp_tran.py --as-drawn      # sin ajustar
+```
+
+**`trim` corre siempre primero y los demás casos usan los cursores que
+resuelve.** Caracterizar la distorsión de un amplificador mal polarizado no
+mide el diseño, mide el error de ajuste.
+
+### Lo que hace viable la suite
+
+El `.tran` del esquemático tarda **64 s** porque espera hasta `t = 4 s`: el raíl
+sale de la red y en DC una `SINE(0 325 50)` vale 0 V. Con la misma fuente `V_RAW`
+del barrido AC y `V4` apagada, el `.op` **es** el estado estacionario y el
+`.tran` arranca ya polarizado — comprobado: 47 µV de diferencia entre t = 0 y el
+`.op`, y 1.25 mV de deriva en 50 ms. **De 64 s a 1-2 s por corrida.**
+
+Para el **sag** y el **zumbido** hace falta la red de verdad (`R22` = 15 Ω de
+primario, `C13` de 10000 µF), y ahí sí se pagan los 4 s: son los únicos casos
+lentos.
+
+Los trimmers se resuelven por **bisección sobre `.op`**, que cuesta 0.15 s, no
+por transitorios. Verificado contra un `.tran` asentado: 0.016 mA de diferencia.
+
+Referencia de lo medido el 2026-08-27:
+
+```
+trimmers      tal como esta dibujado: 37.4 mA por R16, +259 mV de offset.
+              Los 762 mA de la medida vieja eran SENAL, no reposo.
+              Resuelto: RV2 = 0.0358 -> 39.98 mA ; RV1 = 0.5500 -> -0.1 mV
+              R16 y R17 difieren ~10 mA: se cuelan por R14 (56 ohm de la base
+              de Q6 a la salida) sin pasar por R16.  KCL cierra.
+potencia      Depende de DONDE se mida, y la diferencia es enorme:
+                etapa de potencia sola (inyectando en serie con C1)
+                    34.2 W al 1 % de THD ; 42.3 W al 10 %
+                cadena completa, drive 0, rail firme de 50.11 V
+                    7.2 W al 1 % ; 15.8 W al 10 %
+                cadena completa, fuente REAL, tono sostenido
+                    6.9 W al 1 % ; 15.5 W al 10 % ; 20.4 W maximo (44 % THD)
+              La diferencia entre 34 W y 7 W es ENTERA del recortador de
+              diodos del preamp: el ampli puede dar 34 W limpios, pero el
+              preamp no deja pasar mas de 7 W sin recortar.
+              Recorte en +22.60/-21.99 V ; asimetria +2.8 % ; rendimiento 61 %
+drive         NO cambia el techo: 23.8 W con el pote a 0 y 22.4 W a fondo.
+              Solo cambia la entrada necesaria (3.5 V contra 0.35 V) y quien
+              recorta.  A fondo da MENOS porque el recortador se come el
+              fundamental (la cresta se queda en 1.65-1.86: no llega a
+              cuadrada, el recorte es blando y la tone stack lo filtra).
+distorsion    THD de fondo 0.026-0.029 % entre 0.17 y 0.69 W.  A partir de
+              drive 75 % el que recorta es el PREAMP: TONE_IN 14.8 % y 28.2 %
+              contra 20.9 % y 39.0 % en el altavoz.  H2/H3 = 6.3 a drive 0
+              (calido), 0.50 al 50 % (aspero), 1.54 al 100 %.
+              IMD de dos tonos (82.5 + 1320 Hz, 50 mV cada uno): 0.015 %
+estabilidad   slew rate 2.4 V/us ; subida 3.5 us ; sobrepico 0.3 % con carga
+              resistiva, 0.7 % con 220 nF y 15.1 % con 2.2 uF, con un rizado
+              de 145 kHz.  Sin oscilacion mantenida: estable, con margen
+              justo.  OJO: hay que medirlo LEJOS del recorte; con la salida
+              cerca del techo el sobrepico salia 2 % en vez de 15 %.
+sag           rail 50.11 V en reposo -> 44.63 V al final de una rafaga de
+              300 ms a plena potencia.  5.5 V de caida, salida comprimida
+              -0.64 dB.  Recuperacion: 82 % en 270 ms, constante ~159 ms.
+              Recuperar cuesta mucho mas que caer.
+zumbido       100 Hz en el altavoz: 0.465 mV en reposo, 23.1 mV a plena
+              potencia (+33.9 dB).  Medirlo en reposo no vale de nada.
+```
+
+Cuatro puntos abiertos que salen de aquí:
+
+1. **El "40 W" es real, pero solo en la etapa de potencia.** Inyectando
+   directamente en la entrada del ampli, da **34.2 W al 1 % de THD y 42.3 W al
+   10 %** sobre 7.5 Ω. La cadena completa da 7.2 W y 15.8 W, y la diferencia es
+   entera del recortador de diodos del preamp. Para un ampli de guitarra eso no
+   es un defecto —de ahí sale el overdrive—, pero hay que decir cuál de los dos
+   números se está dando. *(Corregido: antes decía aquí que el 40 W no existía;
+   era consecuencia del RMS sobre muestras crudas de la trampa 8 y de medir a
+   través del preamp.)*
+2. **`RV2` es inajustable en la práctica**: −11.9 mA por cada 1 % de giro, y
+   todo el rango útil (0 a 92 mA) cabe en el 8 % del recorrido, con los 40 mA
+   en el 3.6 %. En un trimmer de una vuelta son 13 grados. Habría que reducir
+   el pote y meter resistencias fijas para que el margen quede repartido.
+3. **15 % de sobrepico con 2.2 µF** y un rizado de 145 kHz. No oscila, pero el
+   margen de fase es justo, y encaja con que el amplificador siga plano hasta
+   100 kHz.
+4. **El raíl real en reposo son 50.11 V**, no los 48.88 V que usa el modo
+   banco. Es 0.6 V de techo de recorte que los demás casos no cuentan; se
+   corrige con `--vraw 50.11`.
+
 ## La suite del 40W: `verify_tone_ac.py`
 
 Barre `bass` y `treble` en `.ac` y saca la respuesta de la tone stack medida
@@ -227,7 +386,7 @@ interaccion          la stack a 1 kHz va de -36.3 dB (bass=0/treble=0) a
 ### La figura
 
 > **El netlist no está versionado.** Igual que `psu_cvcc.net`, el
-> `AudioAmpCompl-40W.net` está en `.gitignore`: en un clon limpio hay que
+> `quasimod_guitar_amplifier.net` está en `.gitignore`: en un clon limpio hay que
 > exportarlo una vez desde la GUI (`File > Export Netlist`) antes de usar
 > `verify_tone_ac.py` o `plot_tone_ac.py`. Aquí **no** vale `asc2net.py`: el
 > `.asc` pone varias etiquetas sobre la misma red (`VRAW+` donde el netlist
