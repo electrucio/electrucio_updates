@@ -56,8 +56,14 @@ def read_raw(path):
     # .tran / .dc: variable independiente float64, resto float32
     dt = np.dtype([("x", "<f8")] + [(f"v{k}", "<f4") for k in range(nvars - 1)])
     rec = np.frombuffer(data, dtype=dt, count=npoints)
+    # Con un `tstart` en el .tran, LTspice guarda el tiempo RELATIVO a el y
+    # pone el desplazamiento en la cabecera.  Sin sumarlo, un `.tran 0 4.6 3.75`
+    # devuelve tiempos de 0 a 0.85 y cualquier medida en tiempo absoluto sale
+    # desplazada, en silencio.
+    m = re.search(r"Offset:\s*([-\d.eE+]+)", header)
+    offset = float(m.group(1)) if m else 0.0
     # LTspice marca los puntos comprimidos poniendo el bit de signo del tiempo
-    out = {names[0]: np.abs(rec["x"])}
+    out = {names[0]: np.abs(rec["x"]) + offset}
     for k in range(nvars - 1):
         out[names[k + 1]] = rec[f"v{k}"].astype(np.float64)
     return names, out
