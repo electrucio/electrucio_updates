@@ -489,3 +489,60 @@ thermal:  28.2 W -> Tj 48.1 C con ventilador al 61 % (67 C sin ventilador) ;
 Los tres puntos abiertos que salieron de ahí (lógica de tomas durante el límite
 de corriente, M3 infradimensionado, ancho de banda del lazo CC) están anotados
 en la cabecera de `verify_psu.py`.
+
+## La curva de THD del 40W: `bench.py` + `plot_thd_curve.py`
+
+```bash
+python3 tools/ltspice/plot_thd_curve.py            # redibuja desde el JSON
+python3 tools/ltspice/plot_thd_curve.py --resim    # vuelve a simular (~90 s)
+```
+
+Escribe `guitar_amplifier/quasimod_thd.{json,svg,png}`. El JSON es la fuente de
+la figura y va versionado, así que redibujar no toca LTspice: sólo `--resim`
+simula, y es lo único que necesita el `.net`.
+
+`bench.py` es el banco: parchea el netlist del 40W para fijar cada mando y cada
+condición, lo corre en batch y devuelve armónicos y `.meas`. `thd_split()`
+separa el THD en par e impar, que para una guitarra dice más que el total.
+
+### Las condiciones no son arbitrarias
+
+**700 mVpp de entrada** es la senoidal con el mismo valor eficaz que los
+acordes medidos con la guitarra (230 mV RMS). Lo que equipara un tono de prueba
+a material real es el RMS, no el pico: el pico sólo manda durante el ataque,
+mientras que el resto de la nota —lo que se juzga— lo gobierna el eficaz. Con
+el pico sale disparatado: una senoidal a los 1,6 Vpp de un acorde da 23,9 % de
+THD con la ganancia a 0,5, donde la guitarra suena limpia. Esa diferencia es
+factor de cresta, 3 dB de una senoidal contra unos 18 de un acorde.
+
+**`drive=0` no es el mínimo del aparato.** El pote es logarítmico inverso y el
+tope mecánico de abajo cae en `drive 0,20`; a esa altura la pista ya ha bajado
+a 479 Ω de los 1000. Un quinto de vuelta se come la mitad de la resistencia.
+
+**Volumen a 0,5** deja la etapa de potencia fuera de recorte, así que la curva
+enseña sólo lo que hacen el drive y los recortadores. Con el volumen al tope se
+mezclarían dos mecanismos y no se podría leer ninguno.
+
+### La trampa del rail rígido
+
+`mains=False` sustituye la cadena de red por una continua de `vraw` voltios:
+3 s por punto en vez de 80. Vale para todo lo que no dependa de la regulación,
+y la curva de THD es de ésas, porque a volumen 0,5 el rail apenas cae.
+
+Para potencia máxima o caída de rail **no vale**, y la diferencia no es
+cosmética: con un rail rígido a 46,6 V el modelo llega limpio a 41,4 Vpp y el
+aparato real se queda en 35,7, lo que lleva a culpar a la etapa de salida de
+perder el doble de lo debido. Con la red simulada el rail se hunde solo y el
+techo baja a los 35-37 Vpp medidos. No había pérdida anómala; había una fuente
+perfecta. Con `mains=True`, `settle` tiene que ser **0,8 s o más**: cargar los
+10000 µF lleva cientos de milisegundos y con los 30 ms por defecto se mide el
+arranque, no el régimen permanente.
+
+### Necesita el `.net`, que está en el `.gitignore`
+
+Los parches van contra los nombres de nodo que genera LTspice (`N004`, `N023`,
+`0002`...), así que hace falta su netlist. Este build no sabe netlistar en
+batch — `-netlist` abre ventana y se queda ahí —, de modo que hay que abrir
+`quasimod_guitar_amplifier.asc` en la GUI una vez. `asc2net.py` produce un
+netlist equivalente pero numera los nodos anónimos de otra forma y no sirve de
+sustituto. `bench.py` falla con ese mensaje si no lo encuentra.
