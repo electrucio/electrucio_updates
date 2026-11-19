@@ -538,11 +538,16 @@ perfecta. Con `mains=True`, `settle` tiene que ser **0,8 s o más**: cargar los
 10000 µF lleva cientos de milisegundos y con los 30 ms por defecto se mide el
 arranque, no el régimen permanente.
 
-### Necesita el `.net`, que está en el `.gitignore`
+### Por qué el `.net` va versionado
 
 Los parches van contra los nombres de nodo que genera LTspice (`N004`, `N023`,
-`0002`...), así que hace falta su netlist. Este build no sabe netlistar en
-batch — `-netlist` abre ventana y se queda ahí —, de modo que hay que abrir
-`quasimod_guitar_amplifier.asc` en la GUI una vez. `asc2net.py` produce un
-netlist equivalente pero numera los nodos anónimos de otra forma y no sirve de
-sustituto. `bench.py` falla con ese mensaje si no lo encuentra.
+`0002`...), así que hace falta **su** netlist y no otro. Este build no sabe
+netlistar en batch — `-netlist` abre ventana y se queda ahí — y `asc2net.py`
+numera los nodos anónimos de otra forma, de modo que no sirve de sustituto.
+Ignorar el `.net`, como se hace con el resto de artefactos, dejaba la curva
+irreproducible sin pasar por la GUI, así que éste es la excepción y va en el
+repo.
+
+La contrapartida: al abrir el `.asc` en LTspice, el `.net` se reescribe y
+reaparece como modificado aunque sea equivalente. Si el diff es sólo
+renumeración de nodos anónimos, se descarta sin más.

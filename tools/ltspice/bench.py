@@ -27,11 +27,15 @@ Dos decisiones que importan al leer los resultados:
 PROBES es constante de modulo: se reasigna antes de llamar a run() para elegir
 que nodos llevan .four y .meas, porque cada uno cuesta tiempo y tamano de .raw.
 
-NECESITA el .net generado por LTspice, que esta en el .gitignore. Este build no
-sabe netlistar en batch (`-netlist` abre ventana y se queda ahi), asi que hay
-que abrir el .asc en la GUI una vez. asc2net.py genera un netlist equivalente
-pero numera los nodos anonimos de otra forma, y los parches de aqui van contra
-los nombres de LTspice, asi que no sirve como sustituto.
+Trabaja sobre el .net que genera LTspice, no sobre el .asc. Va versionado a
+proposito, aunque sea un artefacto: este build no sabe netlistar en batch
+(`-netlist` abre ventana y se queda ahi) y asc2net.py numera los nodos anonimos
+de otra forma, asi que los parches de aqui, que van contra los nombres de
+LTspice, no encajarian. Sin el .net en el repo no habria forma de reproducir
+nada sin pasar por la GUI.
+
+Al abrir el .asc en la GUI, LTspice reescribe el .net y puede aparecer como
+modificado aunque sea equivalente.
 """
 import re
 import sys
@@ -48,9 +52,10 @@ NET = AMP / "quasimod_guitar_amplifier.net"
 if not NET.exists():                                      # pragma: no cover
     raise SystemExit(
         f"falta {NET}\n"
-        "Esta en el .gitignore y lo genera LTspice. Abre el .asc en la GUI y\n"
-        "File > Export Netlist, o simplemente corre una simulacion: el .net\n"
-        "aparece al lado. `LTspice -netlist` NO funciona en batch en este build.")
+        "Deberia estar versionado. Si lo has borrado, recuperalo con\n"
+        "  git checkout -- guitar_amplifier/ltspice/quasimod_guitar_amplifier.net\n"
+        "o regeneralo abriendo el .asc en la GUI de LTspice: `-netlist` NO\n"
+        "funciona en batch en este build.")
 MAINS = "V4 N004 N005 SINE(0 325 50) Rser=0.1"
 SPEAKER_MODEL = ("R28 0003 0002 12.5", "L4 0003 0002 20m", "C15 0003 0002 250u",
                  "R29 0004 0003 0.5", "C16 0004 0003 50u", "L5 0004 0003 100u",
