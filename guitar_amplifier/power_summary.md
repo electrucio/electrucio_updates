@@ -4,12 +4,29 @@
 
 |                    | Measured           | Simulated          |
 |--------------------|--------------------|--------------------|
-| Max clean sine     | 12.5 Vrms · 19.5 W | 12.8 Vrms · 20.5 W |
+| Max clean sine     | 12.5 Vrms · 19.5 W | 12.9 Vrms · 20.9 W |
 | Max distorted sine | 17.4 Vrms · 37.8 W | 17.5 Vrms · 38.3 W |
 
-*Clean* means below 1% THD. The simulated figures come from
-`ltspice/quasimod_guitar_amplifier.asc` driven from the real mains chain, not
-from a stiff DC rail — see the note below, it is the whole point.
+## Conditions
+
+Common to all four figures: 1 kHz sine into an 8 Ω resistive load, treble at
+maximum, bass at minimum, volume at maximum, clipping diodes switched out.
+
+**Max clean sine** — gain at minimum, output below 1% THD. Measured with
+410 mVpp at the input jack: 35.7 Vpp at the load, supply at 46.6 V. Simulated
+with 430 mVpp at the jack and the gain pot at 0.20, which is the model value
+that corresponds to the real pot's mechanical minimum — the taper is reverse
+log, so its bottom stop is not zero. At 420 mVpp the model gives 35.79 Vpp
+against the 35.7 Vpp measured at 410, which is agreement to 2%.
+
+**Max distorted sine** — the highest RMS the amplifier will deliver at any
+setting. Measured with 1 Vpp at the jack and gain near 0.5, heavily clipped on
+the scope, supply sagging to 45.0 V. Simulated with 1.2 Vpp at the jack and
+gain at 0.20, at 31.7% THD.
+
+Simulated figures come from `ltspice/quasimod_guitar_amplifier.asc` driven from
+the mains transformer calibrated against the bench, not from a stiff DC rail.
+That distinction is not a detail — see the last section.
 
 ## It is a 20 W amplifier
 
