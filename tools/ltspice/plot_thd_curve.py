@@ -17,11 +17,9 @@ esto: una senoidal a los 1,6 Vpp de un acorde da 23,9% de THD con la ganancia a
 0,5, donde la guitarra suena limpia. Esa diferencia es factor de cresta, 3 dB
 de una senoidal contra unos 18 de un acorde.
 
-Los seis puntos anotados son percepciones, no medidas de laboratorio. Se situan
-sobre la curva PAR de su color, con su valor al lado. Ojo con "both" a ganancia
-0,5: ahi la distorsion es casi toda impar (38,1% contra 9,6% de par), asi que
-ese punto cae en la componente menos representativa de su configuracion y hay
-que leerlo mirando tambien la discontinua.
+Ojo con "both" a ganancia 0,5: ahi la distorsion es casi toda impar (38,1%
+contra 9,6% de par), asi que leer solo la continua de esa serie engana y hay
+que mirar tambien la discontinua.
 
 NECESITA el .net de LTspice para --resim; ver la cabecera de bench.py.
 """
@@ -52,15 +50,6 @@ SERIES = (("none", "NO DIODES", "#3a5199", 0, 0),
           ("u2", "U2 ONLY 0.63 V", "#b5762a", 0, 1),
           ("both", "BOTH", "#a83a34", 1, 1))
 
-# (serie, ganancia, THD par, x e y del texto, texto)
-NOTES = [
-    ("u1",   0.5,  4.26, 0.035, 47, "ONE SIDE: ALMOST LIKE NO DIODES"),
-    ("none", 0.5,  0.14, 0.035, 37, "STILL CLEAN ON 2.3 Vpp PEAKS"),
-    ("none", 0.2,  0.03, 0.045, 28, "CLEAN, WARM, PLEASANT"),
-    ("both", 0.5,  9.61, 0.080, 15, "BOTH: MUCH MORE DISTORTED, QUIETER"),
-    ("none", 1.0, 53.78, 0.655, 68, "DISTORTED, OVERDRIVE-LIKE"),
-    ("both", 1.0, 79.08, 0.480, 89, "STRONG OVERDRIVE, NOT FUZZ"),
-]
 PAL = dict(bg="#ffffff", ink="#14181f", muted="#5a626f",
            grid="#ccd2dc", minor="#e8ebf0", frame="#8d95a3")
 
@@ -87,7 +76,6 @@ def simulate() -> dict:
 
 
 def draw(data: dict) -> str:
-    colour = {k: c for k, _, c, _, _ in SERIES}
     w, h = 980, 660
     ax = Ax(92, 126, 856, 418, (0, 1), (0, 92))
     s = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
@@ -99,7 +87,6 @@ def draw(data: dict) -> str:
   .axl{{font:500 12px "IBM Plex Mono",ui-monospace,monospace;fill:{PAL['ink']};letter-spacing:.14em}}
   .lgl{{font:500 11px "IBM Plex Mono",ui-monospace,monospace;fill:{PAL['ink']};letter-spacing:.08em}}
   .lgn{{font:400 11px "IBM Plex Mono",ui-monospace,monospace;fill:{PAL['muted']};letter-spacing:.08em}}
-  .ann{{font:400 11px "IBM Plex Sans",system-ui,sans-serif;letter-spacing:.02em}}
 </style>''']
 
     s.append(f'<text x="92" y="32" class="cond" fill="{PAL["ink"]}">'
@@ -115,9 +102,8 @@ def draw(data: dict) -> str:
                  f'stroke="{col}" stroke-width="2.6" stroke-linecap="round"/>')
         s.append(f'<text x="{lx + 36}" y="82" class="lgl">{label}</text>')
         lx += 44 + len(label) * 7.3
-    s.append(f'<text x="92" y="102" class="lgn">SOLID = EVEN &#183; '
-             f'DASHED = ODD &#183; &#9679; MY IMPRESSIONS WITH A REAL GUITAR, '
-             f'PLACED ON THE EVEN-HARMONIC CURVE</text>')
+    s.append(f'<text x="92" y="102" class="lgn">SOLID = EVEN HARMONICS '
+             f'&#183; DASHED = ODD HARMONICS</text>')
 
     s.append(grid(ax, PAL, linear_ticks(ax, 0.2, 0.1), ystep=5, ymajor=10,
                   yfmt=lambda v: f"{v:g}"))
@@ -132,24 +118,6 @@ def draw(data: dict) -> str:
         s.append(f'<path d="{ax.path(xs, [p["odd"] for p in rows])}" '
                  f'fill="none" stroke="{col}" stroke-width="1.6" '
                  f'stroke-linejoin="round" stroke-dasharray="5 4"/>')
-
-    for key, drive, thd, tx, ty, txt in NOTES:
-        col = colour[key]
-        label = f"{txt} &#183; {thd:.2f}%" if thd < 1 else f"{txt} &#183; {thd:.1f}%"
-        width = (len(label) - 5) * 6.1          # &#183; ocupa un caracter
-        px, py = ax.x(drive), ax.y(thd)
-        qx, qy = ax.x(tx), ax.y(ty)
-        ex = qx + width
-        # el tirante sale del borde del texto que mira al punto; si el punto
-        # cae justo debajo del texto, baja recto en vez de rodearlo
-        sx = ex if px > ex else (qx if px < qx else px)
-        s.append(f'<line x1="{sx:.1f}" y1="{qy + 5:.1f}" x2="{px:.1f}" '
-                 f'y2="{py:.1f}" stroke="{col}" stroke-width="1" opacity=".7"/>')
-        s.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="5.5" '
-                 f'fill="{PAL["bg"]}"/>')
-        s.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="3.6" fill="{col}"/>')
-        s.append(f'<text x="{qx:.1f}" y="{qy:.1f}" class="ann" fill="{col}" '
-                 f'text-anchor="start">{label}</text>')
 
     cy = ax.y0 + ax.h / 2
     s.append(f'<text x="34" y="{cy:.0f}" class="axl" text-anchor="middle" '
