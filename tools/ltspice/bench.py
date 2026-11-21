@@ -97,19 +97,70 @@ def resistors(text):
     return out
 
 
+# dispositivos reales del aparato (fuera: puente y modelos auxiliares)
+Q_SKIP = set()
+D_SKIP = {"D1", "D2", "D3", "D4"}          # puente rectificador, aparte
+
+
+def transistors(text):
+    """{nombre: (colector, base, emisor)} de las lineas Qxx del netlist."""
+    out = {}
+    for line in text.splitlines():
+        m = re.match(r"^(Q\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+\S+\s+\S+\s*$",
+                     line.strip())
+        if m:
+            out[m.group(1)] = (m.group(2), m.group(3), m.group(4))
+    return out
+
+
+def diodes(text):
+    """{nombre: (anodo, catodo)} de las lineas Dxx del netlist."""
+    out = {}
+    for line in text.splitlines():
+        m = re.match(r"^(D\d+)\s+(\S+)\s+(\S+)\s+\S+\s*$", line.strip())
+        if m:
+            out[m.group(1)] = (m.group(2), m.group(3))
+    return out
+
+
+def _v(a, b):
+    """V(a,b) salvo si una pata es masa: LTspice no admite V(x,0) ni V(0)."""
+    if b == "0":
+        return f"V({a})"
+    if a == "0":
+        return f"(-V({b}))"
+    return f"V({a},{b})"
+
+
+def _q_meas(name, nodes):
+    """Disipacion instantanea de un BJT: union de colector mas la de base.
+
+    No vale I(Qx) porque un BJT tiene tres patas: hay que sumar las dos
+    uniones.  Ic e Ib son las corrientes de pata que entiende LTspice.
+    """
+    c, b, e = nodes
+    return (f".meas tran P{name} AVG "
+            f"({_v(c, e)}*Ic({name})+{_v(b, e)}*Ib({name}))")
+
+
 def build(work, tag, amp, drive, u1, u2, freq=1000.0, periods=20, settle=30e-3,
           mains=False, vraw=45.0, rload=8.0, speaker_model=False,
           treble=0.5, bass=0.5, vol=1.0, mains_v=325.0, rpow=False,
-          tight=True, patches=()):
+          tight=True, patches=(), qpow=False):
     n = Netlist.from_file(NET).absolutize_libs([AMP])
     n.drop_re(r"\s*\.meas\s+tran\b", 80)
     n.drop_re(r"\s*\.four\b", 7)
     if mains:
         if mains_v != 325.0:
             n.patch(MAINS, MAINS.replace("325", f"{mains_v:g}"))
+        n.add(".meas tran P_RAIL AVG (V(N004,N005)*I(V4))")
+        n.add(".save I(V4) V(N004) V(N005)")
     else:
         n.add(f".param vraw={vraw}", "V_RAW N002 0 {vraw}")
         n.patch(MAINS, "V4 N004 N005 0 Rser=0.1")
+        # potencia que entrega la fuente, para poder cerrar el balance
+        n.add(".meas tran P_RAIL AVG abs(V(N002)*I(V_RAW))")
+        n.add(".save I(V_RAW)")
     if not speaker_model:
         for line in SPEAKER_MODEL:
             n.patch(line + "\n", "")
@@ -137,14 +188,28 @@ def build(work, tag, amp, drive, u1, u2, freq=1000.0, periods=20, settle=30e-3,
               f".meas tran {p}_min MIN V({p})")
     n.add(".meas tran P_SPK AVG abs(V(SPEAKER)*I(R27))",
           ".meas tran VRAW_AVG AVG V(N002)", ".meas tran VRAW_MIN MIN V(N002)")
+    qs, ds = {}, {}
+    if qpow:
+        qs = {k: v for k, v in transistors(n.text).items() if k not in Q_SKIP}
+        ds = {k: v for k, v in diodes(n.text).items() if k not in D_SKIP}
+        for name, nodes in qs.items():
+            n.add(_q_meas(name, nodes))
+        for name, (a, k) in ds.items():
+            n.add(f".meas tran P{name} AVG ({_v(a, k)}*I({name}))")
     rs = {}
     if rpow:
         rs = {k: v for k, v in resistors(n.text).items() if k not in SKIP}
         for name in rs:
             n.add(f".meas tran I{name} RMS I({name})")
-    n.add(".save " + " ".join(f"V({p})" for p in PROBES) + " I(R27) V(N002)"
-          + ("" if not rs else " " + " ".join(f"I({k})" for k in rs)))
-    return n.write(work / f"{tag}.net"), rs
+    keep = [f"V({p})" for p in PROBES] + ["I(R27)", "V(N002)"]
+    keep += [f"I({k})" for k in rs]
+    for name, nodes in qs.items():
+        keep += [f"Ic({name})", f"Ib({name})"]
+        keep += [f"V({x})" for x in nodes if x != "0"]
+    for name, (a, k) in ds.items():
+        keep += [f"I({name})"] + [f"V({x})" for x in (a, k) if x != "0"]
+    n.add(".save " + " ".join(dict.fromkeys(keep)))
+    return n.write(work / f"{tag}.net"), rs, list(qs) + list(ds)
 
 
 def harmonics(log, node):
@@ -166,11 +231,12 @@ def thd_split(h):
 
 
 def run(work, **kw):
-    net, rs = build(work, **kw)
+    net, rs, devs = build(work, **kw)
     run_batch(net, timeout=900)
     log = net.with_suffix(".log")
     out = {p: harmonics(log, p) for p in PROBES}
     out["meas"] = parse_ltspice_log(str(log))["meas"]
     out["rpow"] = {k: out["meas"].get(f"i{k.lower()}", 0) ** 2 * v
                    for k, v in rs.items()}
+    out["qpow"] = {d: out["meas"].get(f"p{d.lower()}", 0.0) for d in devs}
     return out
