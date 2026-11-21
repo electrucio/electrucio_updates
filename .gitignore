@@ -32,3 +32,12 @@ guitar_amplifier/ltspice/*.log
 # nombres de nodo de LTspice y no hay forma de generarlo sin la GUI, asi que
 # ignorarlo rompia la reproducibilidad de la curva de THD. Contrapartida: al
 # abrir el .asc en la GUI reaparece como modificado aunque sea equivalente.
+
+# Renders de audio del 40W: los .wav crudos de LTspice a 192 kHz, los cortes a
+# 48 kHz y las versiones con la sonoridad igualada. Son ~70 MB de material
+# derivado, y git ni comprime ni deltifica un .wav: cada regeneracion guardaria
+# otra copia entera. Se rehacen a partir de ficheros que SI estan versionados
+# (la guitarra seca y la IR del bafle, en junk/guitar_preamplifier/audios) con
+#   python3 tools/ltspice/render_audio.py
+#   python3 tools/ltspice/loudness_match.py
+guitar_amplifier/renders/

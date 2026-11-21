@@ -43,8 +43,11 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ltrun import run_batch                                     # noqa: E402
-from verify_amp_tran import Bench, VRAW_DC                      # noqa: E402
-from verify_tone_ac import NET, VSRC                            # noqa: E402
+import bench                                                    # noqa: E402
+from ltrun import Netlist                                       # noqa: E402
+
+NET = bench.NET
+VSRC = "V6 PICKUP_IN 0 SINE(0 {in_amplitude} {in_freq})"
 
 AUDIO = (Path(__file__).resolve().parents[2]
          / "junk/guitar_preamplifier/audios")
@@ -54,15 +57,16 @@ IR = AUDIO / "SL_112_Fender_DR_A.wav"
 SIM_SR = 192_000        # captura sobremuestreada, para no plegar armonicos
 OUT_SR = 48_000         # el de la IR: asi no hay que remuestrear la IR
 MAXSTEP = "2u"          # 500 kHz de resolucion en el solver
-WARMUP = 4.0            # s de arranque del deposito en modo red
+WARMUP = 1.5            # s de arranque del deposito en modo red (bastan 0.8)
 OUT_SCALE = 32.0        # V a fondo de escala del .wave (el ampli da ~+-22 V)
 LPF_HZ = 20_000.0       # esquina del antialias antes de decimar
 
-# El pico del corte es 0.3235 en fondo de escala.  Con `peak_mv` = 320 el
-# factor es ~1, o sea que el WAV se toma como si fueran voltios de pickup.
-# Referencias medidas en este mismo circuito: 50 mVp = single coil suave,
-# 150 mVp = normal, 300-600 mVp = puas fuertes.
-PEAK_MV = 320.0
+# A que pico de pickup se mapea el WAV.  Las referencias son MEDIDAS en este
+# aparato con el osciloscopio, no de catalogo: un acorde normal da unos 230 mV
+# eficaces y picos de 1.6 Vpp, y tocando un poco fuerte sube hasta 1.5-1.6 Vpp.
+# O sea 750-800 mV de PICO, mas del doble de los 320 que habia aqui antes.
+#   suave  ~250 mVp  |  normal  ~500 mVp  |  fuerte  ~750 mVp (1.5 Vpp)
+PEAK_MV = 750.0
 
 
 # ------------------------------------------------------------------- WAV a pelo
@@ -132,10 +136,24 @@ def convolve(y: np.ndarray, ir: np.ndarray) -> np.ndarray:
 
 
 # --------------------------------------------------------------------- el render
-def build(bench: Bench, wav_in: Path, wav_out: Path, tstop: float,
-          gain: float, tag: str, drive: float, vol: float) -> Path:
-    """Netlist listo para simular: WAV dentro, WAV fuera."""
-    n = bench._base(params={"drive": drive, "vol": vol})
+def build(work: Path, wav_in: Path, wav_out: Path, tstop: float,
+          gain: float, tag: str, drive: float, vol: float,
+          u1: int, u2: int, treble: float, bass: float) -> Path:
+    """Netlist listo para simular: WAV dentro, WAV fuera.
+
+    Modo RED (sin V_RAW): el sag y el zumbido de 100 Hz tienen que oirse, y
+    con una continua rigida no existen.  El altavoz es su modelo de
+    impedancia, no 7.5 ohm muertos.
+    """
+    n = Netlist.from_file(NET).absolutize_libs([bench.AMP])
+    n.drop_re(r"\s*\.meas\s+tran\b", 80)
+    n.drop_re(r"\s*\.four\b", 7)
+    n.patch(bench.U1, bench.U1.replace("Status=0.5", f"Status={u1}"))
+    n.patch(bench.U2, bench.U2.replace("Status=0.5", f"Status={u2}"))
+    n.patch(".param drive=1", f".param drive={drive}")
+    n.patch(".param vol=1.0", f".param vol={vol}")
+    n.patch(".param treble=0.5", f".param treble={treble}")
+    n.patch(".param bass=0.5", f".param bass={bass}")
     n.patch(VSRC, "V6 PICKUP_IN 0 0")     # el modelo de pickup queda inerte
     n.patch(".options plotwinsize=0\n", "")   # el .raw no interesa: pesa GB
     n.drop_re(r"\s*\.tran\b", 1)
@@ -148,15 +166,17 @@ def build(bench: Bench, wav_in: Path, wav_out: Path, tstop: float,
         ".save V(SPEAKER)",
         f".tran 0 {tstop:.4f} {WARMUP} {MAXSTEP}",
     )
-    return n.write(bench.w / f"{tag}.net")
+    return n.write(work / f"{tag}.net")
 
 
-def render(bench: Bench, wav_in: Path, tstop: float, gain: float,
-           tag: str, drive: float, vol: float) -> np.ndarray:
+def render(work: Path, wav_in: Path, tstop: float, gain: float,
+           tag: str, drive: float, vol: float, u1: int, u2: int,
+           treble: float, bass: float) -> np.ndarray:
     """Simula y devuelve la tension en el altavoz, en VOLTIOS, a SIM_SR."""
-    out = bench.w / f"{tag}_sim.wav"
+    out = work / f"{tag}_sim.wav"
     out.unlink(missing_ok=True)
-    net = build(bench, wav_in, out, tstop, gain, tag, drive, vol)
+    net = build(work, wav_in, out, tstop, gain, tag, drive, vol,
+                u1, u2, treble, bass)
     t0 = time.time()
     run_batch(net, timeout=7200)
     if not out.exists():
@@ -172,17 +192,22 @@ def render(bench: Bench, wav_in: Path, tstop: float, gain: float,
     return y * OUT_SCALE
 
 
+# Seis puntos de la curva de THD, en sus mismas condiciones (tono 0.5/0.5,
+# volumen 0.5), para poder oir lo que la curva mide.  u1 = ramal de 1.3 V,
+# u2 = ramal de 0.63 V.
 CONFIGS = [
-    # etiqueta         drive  ramal+   ramal-   sangrado (None = 2k2 dibujado)
-    ("clean_d0",         0.0, "gnd",  "gnd",  None),
-    ("stock_d50",        0.5, "gnd",  "gnd",  None),
-    ("stock_d100",       1.0, "gnd",  "gnd",  None),
-    ("nodiodes_d50",     0.5, "open", "open", None),
-    ("nodiodes_d100",    1.0, "open", "open", None),
-    ("bias_d50",         0.5, "bias", "bias", None),
-    ("bias_d100",        1.0, "bias", "bias", None),
-    ("bias_d100_r22k",   1.0, "bias", "bias", "22k"),
-    ("halfwave_d100",    1.0, "gnd",  "open", None),
+    # etiqueta              ganancia  u1  u2   lo que dice la figura
+    ("clean_g20",               0.20,  0,  0),
+    ("clean_g50",               0.50,  0,  0),
+    ("u1_g50",                  0.50,  1,  0),
+    ("u2_g50",                  0.50,  0,  1),
+    ("both_g50",                0.50,  1,  1),
+    ("clean_g70",               0.70,  0,  0),
+    ("u1_g70",                  0.70,  1,  0),
+    ("u2_g70",                  0.70,  0,  1),
+    ("both_g70",                0.70,  1,  1),
+    ("clean_g100",              1.00,  0,  0),
+    ("both_g100",               1.00,  1,  1),
 ]
 
 
@@ -195,17 +220,23 @@ def main():
                     help="segundos a saltar del principio del corte")
     ap.add_argument("--peak-mv", type=float, default=PEAK_MV,
                     help="a que pico de pickup, en mV, se mapea el WAV")
-    ap.add_argument("--clip-r", default="2k2",
-                    help="resistencia de sangrado de los ramales en bias")
-    ap.add_argument("--vol", type=float, default=1.0,
+    ap.add_argument("--treble", type=float, default=0.5)
+    ap.add_argument("--bass", type=float, default=0.5)
+    ap.add_argument("--vol", type=float, default=0.5,
                     help="master (0-1).  OJO: por encima de 0.85 la etapa de "
                          "potencia recorta y aplasta las diferencias entre "
                          "conmutadores, de +2.8 dB a +1.0 dB.  Medido.")
     ap.add_argument("--only", nargs="*", help="solo estas configuraciones")
+    ap.add_argument("--norm", type=float, default=None,
+                    help="factor de normalizacion FIJO, de una corrida "
+                         "anterior.  Sin esto, --only renderiza contra si "
+                         "mismo y el resultado NO es comparable con los demas")
     a = ap.parse_args()
 
     if not NET.exists():
-        sys.exit(f"no encuentro {NET}: exportalo desde la GUI de LTspice")
+        sys.exit(f"no encuentro {NET}: va versionado, recuperalo con\n"
+                 "  git checkout -- guitar_amplifier/ltspice/"
+                 "quasimod_guitar_amplifier.net")
     for f in (DRY, IR):
         if not f.exists():
             sys.exit(f"no encuentro {f}")
@@ -242,23 +273,29 @@ def main():
 
     cfgs = [c for c in CONFIGS if not a.only or c[0] in a.only]
     results, rows = {}, []
-    for tag, drive, cp, cn, rcfg in cfgs:
-        cr = rcfg or a.clip_r
-        print(f"  {tag:16s} drive={drive*100:3.0f}%  clip=({cp},{cn})"
-              + (f"  sangrado={cr}" if "bias" in (cp, cn) else ""), flush=True)
-        b = Bench(work, mains=True, dummy_load=False, clip=(cp, cn),
-                  clip_r=cr)
-        v = render(b, wav_in, tstop, gain, tag, drive, a.vol)
+    for tag, drive, u1, u2 in cfgs:
+        print(f"  {tag:16s} ganancia={drive*100:3.0f}%  U1={u1} U2={u2}",
+              flush=True)
+        v = render(work, wav_in, tstop, gain, tag, drive, a.vol, u1, u2,
+                   a.treble, a.bass)
         v48 = resample(v, SIM_SR, OUT_SR)
         v48 -= v48.mean()                       # por si queda continua
         results[tag] = convolve(v48, ir)
         vrms = float(np.sqrt(np.mean(np.square(v48))))
-        rows.append((tag, drive, f"{cp}/{cn}", float(np.abs(v48).max()),
+        rows.append((tag, drive, f"{u1}/{u2}", float(np.abs(v48).max()),
                      vrms, vrms**2 / 7.5))
 
-    # un solo factor para TODOS: asi la diferencia de volumen entre
-    # configuraciones se conserva y se puede comparar de verdad
-    k = 0.891 / max(float(np.abs(y).max()) for y in results.values())
+    # Un solo factor para TODOS: asi la diferencia de volumen entre
+    # configuraciones se conserva y se puede comparar de verdad.
+    #
+    # OJO con --only: el factor sale del maximo de ESTA corrida, asi que
+    # renderizar una configuracion suelta la normaliza contra si misma y la
+    # deja incomparable con las que ya estaban en el disco.  Para anadir una
+    # sola, se pasa --norm con el factor que imprimio la corrida completa.
+    # (Solo es valido si la nueva no supera a la mas alta de aquella; si la
+    # supera, hay que rehacerlas todas.)
+    k = (a.norm if a.norm is not None
+         else 0.891 / max(float(np.abs(y).max()) for y in results.values()))
     for tag, y in results.items():
         wr_wav(out / f"{tag}.wav", y * k, OUT_SR)
 
@@ -273,7 +310,7 @@ def main():
         print(f"{tag:17s} {drive*100:5.0f}% {clip:>10s} {vp:8.2f} "
               f"{vr:7.2f} {pw:8.2f}")
     print(f"\n{len(results)+1} ficheros en {out}")
-    print(f"normalizados con el MISMO factor ({k:.4f}), o sea que las "
+    print(f"normalizados con el MISMO factor ({k:.6g}), o sea que las "
           f"diferencias de volumen son reales")
     return 0
 
