@@ -551,3 +551,100 @@ repo.
 La contrapartida: al abrir el `.asc` en LTspice, el `.net` se reescribe y
 reaparece como modificado aunque sea equivalente. Si el diff es sólo
 renumeración de nodos anónimos, se descarta sin más.
+
+## Lo que se mide sin tocar el aparato: `power_budget.py`, `stability.py`, `noise_hum.py`
+
+Tres análisis que no estaban y que no necesitan banco. Los tres se apoyan en
+`bench.py`, no en `verify_amp_tran.py`, **y eso no es una preferencia de
+estilo**: la suite vieja ya no corre contra este netlist. Modela el recortador
+como `D5/D6/D7/D9` con `C36/R41` y `C35/R63` a masa, que es como estaba antes
+de que los ramales pasaran por los conmutadores `XU1`/`XU2`. Al primer
+`_base()` revienta con *`'C36 N024 0 10u' aparece 0 veces`*. Arreglarla es un
+trabajo aparte; mientras tanto, lo que se necesitaba de ella se ha rehecho.
+
+### `power_budget.py`: dónde se queda la potencia
+
+Barre la entrada de 40 mVpp a 1.8 Vpp y mide, en cada punto, lo que llega al
+altavoz y lo que disipa **cada** transistor, cada resistencia y cada diodo.
+
+La disipación de un BJT no es `I(Qx)`: tiene tres patas y hay que sumar las
+dos uniones, `V(c,e)·Ic + V(b,e)·Ib`. Dos trampas al medirlo:
+
+1. **`Ic()`/`Ib()` tienen que estar en el `.save`** o el `.meas` sale
+   `FAIL'ed` y el valor se lee como 0. Silencioso y muy fácil de no ver: la
+   tabla sale entera, con ceros.
+2. **`V(x,0)` y `V(0)` no son expresiones válidas.** Q7 y Q2 tienen el emisor
+   a masa, así que su medida hay que escribirla `V(Q7C)` a secas. Si no, esos
+   dos —y Q7 es uno de los de salida— salen a cero mientras el resto funciona.
+
+Va en modo RED, no con continua rígida. Con un rail firme de 50 V el ampli
+aparenta dar 50 W, porque una fuente ideal no se entera de que le están
+pidiendo 5 A.
+
+**Y el arranque son 2 s, no 0.8.** Esto se me escapó y la tabla entera salió
+mal una vez. Los 0.8 s de la trampa del depósito son los que tarda en cargarse
+`C13`, y son correctos *para el depósito*. El aparato entero tarda más: con la
+etapa de salida recortando, el acoplo de salida de 3300 µF y la red de
+polarización siguen moviéndose mucho después. Medido contra el punto
+distorsionado de `power_summary.md`, que ya estaba publicado:
+
+```
+  settle   Vrms      W      THD
+    0.9   16.42   33.70   29.7%     <- transitorio, 12 % por debajo
+    2.0   17.54   38.47   37.3%     <- regimen permanente, y cuadra
+```
+
+Con 0.9 s no se está midiendo el amplificador, se está midiendo cómo llega a
+serlo. Cuesta el doble por punto y no es negociable.
+
+Dos más, pequeñas, de la misma tabla:
+
+- `R27` es la carga, no una pieza: sale del ranking de resistencias porque ya
+  tiene su propia columna. Y como un altavoz de guitarra convierte en sonido
+  un 1-5 % de lo que recibe, esa columna **es** la disipación de la bobina.
+- `I(V4)` sale con el signo del generador. El `abs()` va fuera del `.meas`, no
+  dentro: dentro falsea la media, fuera sólo arregla el signo.
+
+### `stability.py`: sobrepico y margen, barriendo C11
+
+**Por qué no hay diagrama de Bode del lazo.** Este amplificador tiene dos
+caminos de realimentación en paralelo: `R5` (4k7) desde `PRE_SPEAKER` al
+emisor de Q1, y `R19` (2k2) desde `SPEAKER` al nodo `FEEDBACK`, que llega al
+mismo emisor por `C4`. Romper sólo uno deja el otro cerrado y lo que sale no
+es la ganancia de lazo: medido así daba **6.5 dB en banda media**, que para un
+ampli con ~48 de ganancia en lazo cerrado es absurdo. El punto común es el
+emisor de Q1, y ahí la impedancia hacia atrás (~47 Ω, que es `R4`) y hacia
+delante (`re` de Q1, del mismo orden) son comparables, así que no vale ni
+inyección de tensión ni de corriente: haría falta la doble inyección de Tian.
+
+El sobrepico con escalón lleva la misma información, **y además se mide en el
+banco con un generador de cuadrada**. La cuadrada va a 20 kHz y no a 1 kHz: con
+los graves al mínimo, el techo de una cuadrada de 1 kHz se desploma entre
+flanco y flanco, y entonces lo que se mide como «sobrepico» es la caída. Con
+1 kHz salían 1360 %.
+
+### `noise_hum.py`: siseo y zumbido, que no son lo mismo
+
+El siseo es aleatorio y sale del `.noise` en 0.08 s, con la contribución de
+cada dispositivo por separado en el `.raw`. El zumbido es determinista —el
+rizado del depósito colándose en la señal— y el `.noise` **no lo ve**: hace
+falta la red simulada y un `.tran` largo.
+
+Tres cosas que costaron un rato:
+
+- **El ruido referido a la entrada no se integra.** La ganancia se desploma en
+  los extremos de la banda, `inoise` se dispara al dividir por ella y la
+  integral se la comen los bordes donde el ampli ya no amplifica: salían
+  39.7 µV cuando la cifra buena es 14.5. Se da como ruido de salida partido
+  por la ganancia en banda media.
+- **El `.four` del zumbido lo separa `parse_log`**, que mete los bloques de
+  50 Hz en `fourier_mains` y con la frecuencia absoluta como clave, no con el
+  índice de armónico. `fourier_signal` sale vacío y parece que no ha medido.
+- **La señal de prueba del zumbido va a 1 kHz, no a 50.** A 50 Hz el rizado de
+  100 cae justo encima del segundo armónico de la propia señal.
+
+Y una que afecta a cualquier medida de potencia con la red simulada:
+`AVG(abs(V·I))` sobre el secundario **no es** la potencia media. Con
+rectificador de condensador la corriente va y viene, y el `abs()` dentro de la
+media cuenta como consumo la energía que el depósito devuelve al secundario:
+daban 14 W en reposo. Va sin `abs()` dentro.
