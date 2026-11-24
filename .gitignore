@@ -41,3 +41,9 @@ guitar_amplifier/ltspice/*.log
 #   python3 tools/ltspice/render_audio.py
 #   python3 tools/ltspice/loudness_match.py
 guitar_amplifier/renders/
+
+# Articulos de revista comprados. Son copias personales con marca de agua
+# (nombre y numero de suscriptor en cada pagina) y este repo es publico:
+# versionarlas seria republicar material de pago y, de paso, esos datos. El
+# fichero vive en local y docs/README.md da la referencia para comprarlo.
+powersupply/psu_cvcc/docs/silicon_chip_45v_8a.pdf

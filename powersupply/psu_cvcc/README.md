@@ -10,6 +10,11 @@ elemento de control y operacionales tirando del pin ADJ—: la fuente de
 Elliott**. **No hay ninguna decisión de diseño sin precedente en una de esas
 tres fuentes**; la tabla de abajo dice de cuál sale cada una.
 
+En [`docs/`](docs/) está la investigación en foros de la que salió el
+planteamiento (tomas en el transformador, límite ajustable con potenciómetro, y
+por qué no se usó ninguna de las topologías alternativas), y la referencia del
+artículo de Silicon Chip, que es de pago y no se versiona.
+
 | | |
 |---|---|
 | Tensión | **0 – 40,5 V**, pote de 3k9 |
