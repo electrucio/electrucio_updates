@@ -180,8 +180,8 @@ place("res", UX + 180, 880, "R2", "R=max(V(VSET)*3900,0.1)", ["VADJ", "VNREF"])
 place("cap", UX + 340, 880, "Cadj", "10u", ["VADJ", "VNEG"])
 place("cap", UX + 480, 680, "Cout", "10u", ["VOUT", "0"])
 place("cap", UX + 500, 880, "Cout_hf", "100n", ["VOUT", "0"])
-label(UX - 60, 460, "R1 = carga minima (10,4 mA).  Cadj -> 80 dB de rechazo (fig. 21).")
-label(UX - 60, 420, "R2 a VNREF = VRTN - 1,25 (cero a 0 V).  Cadj a los -5 V, como Silicon Chip.")
+label(UX - 60, 460, "R1 = carga minima (10,4 mA).  R2 = pote MULTIVUELTA de 2 W (420 mW).")
+label(UX - 60, 420, "R2 a VNREF = VRTN - 1,25 (cero a 0 V).  Cadj a -5 V (S.Chip): 80 dB (fig. 21).")
 _touch(UX - 70, 450)
 
 # ==================================== 6. DIODOS DE PROTECCION (fig. 15) =======

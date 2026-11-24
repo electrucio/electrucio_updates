@@ -74,9 +74,13 @@ Es la única parte donde hay que combinar los dos diseños en vez de copiar uno:
 - 0,1 µF en la entrada del regulador (§8.4.1)
 - **LM317HV en TO-220**, con disipador de ≤2 °C/W y aislador de mica
 - R1 = 120 Ω (fija 10,4 mA de carga mínima permanente)
-- R2 = pote 3k9 / 1 W (disipa 0,42 W a fondo de escala), vuelve a la
-  **referencia de −1,25 V**, que a su vez se referencia al **borne** (`VRTN`),
-  no a masa, para que la caída del shunt quede dentro del lazo
+- R2 = pote de 3k9 **multivuelta de 10 vueltas, ≥1 W** (los de este tipo
+  suelen ser de 2 W; comprueba la cifra en el que compres), **no** un pote de
+  panel de 1/4 W: disipa 420 mW a fondo de escala. Las 10 vueltas hacen falta
+  igualmente para poder ajustar con detalle, así que el vataje sale gratis.
+  Vuelve a la **referencia de −1,25 V**, que a su vez se referencia al
+  **borne** (`VRTN`), no a masa, para que la caída del shunt quede dentro del
+  lazo
 - C_ADJ = 10 µF / **63 V** (va al raíl de −5 V, así que ve Vout + 5),
   C_OUT = 10 µF tántalo **+ 100 nF cerámico en paralelo**
 - D_ADJ 1N4148 (ADJ→OUT), D_IN 1N5408 (OUT→IN), D_REV 1N5408 (masa→OUT)
@@ -364,10 +368,11 @@ Lo que sí conviene añadir, porque es lo único de esta condición que no está
 tu mano: un **varistor (MOV) en el primario**. El +10 % de la red lo gestionas
 tú con el mando; un pico de red, no.
 
-### Los potenciómetros no llevan potencia
+### El pote de corriente no lleva nada; el de tensión sí, y no hay forma de evitarlo
 
 Es el fallo clásico del LM317 como regulador de corriente —el pote en serie con
-la carga, que se quema— y aquí no lo tiene ninguno de los dos:
+la carga, que se quema— y ese no lo tiene ninguno de los dos. Pero el pote de
+tensión **es** el divisor de realimentación, así que lleva su corriente:
 
 | escenario | R2 (tensión) | pote de corriente | shunt |
 |---|---|---|---|
@@ -375,10 +380,69 @@ la carga, que se quema— y aquí no lo tiene ninguno de los dos:
 | 20 V a 1 A | 207 mW | 0,0 mW | 363 mW |
 | corto, límite máx | 0 mW | 0,0 mW | 590 mW |
 
-R2 lleva los 10,4 mA del divisor, no la corriente de carga: 420 mW de peor caso
-en un pote de 1 W. El de corriente solo divide los 2,5 V del TL431:
-microamperios. **Ninguno de los dos necesita ser bobinado**, que era el
-requisito.
+El de corriente solo divide los 2,5 V del TL431: microamperios, y da igual lo
+que esté haciendo la fuente. Ese se compra en cualquier sitio.
+
+R2 es otra cosa. El chip mantiene 1,25 V sobre R1, así que la corriente del
+divisor está fijada en **10,4 mA pase lo que pase**, y sobre R2 cae la tensión
+de salida entera:
+
+    P(R2) = (1,25 / R1) · Vout = 10,4 mA · 40,5 V = 420 mW
+
+Lo tranquilizador es que esos 10,4 mA **no dependen de la carga**: son los
+mismos en vacío, a 1 A y en un cortocircuito (donde además Vout vale 0 y el
+pote no disipa nada). El pote tiene un **único** peor caso, está en el extremo
+del recorrido, y es el de la tabla. No puede sorprenderte.
+
+**No se arregla subiendo R1**, que es lo primero que uno intenta. Medido:
+
+| divisor | I divisor | Vout máx | P en el pote |
+|---|---|---|---|
+| 100 Ω + 3k3 | 12,5 mA | 41,1 V | 513 mW |
+| **120 Ω + 3k9** (este diseño) | **10,4 mA** | **40,5 V** | **420 mW** |
+| 150 Ω + 4k7 | 8,3 mA | 39,0 V | 323 mW |
+| 240 Ω + 7k5 (el valor de las figuras de TI) | 5,2 mA | 38,7 V | 200 mW |
+
+La regulación de carga (0,044 %), la de línea y el lazo de CC (1,337 A en el
+corto) salen **idénticos** en los cuatro casos; a `Qcc` incluso le toca sacar
+menos corriente. Lo único que cambia es la **corriente mínima de carga**, y ahí
+está el problema: R1 *es* la carga mínima del regulador. No hay bleeder en la
+salida —`Rbleed` está en el raíl bruto, para descargar los 10.000 µF al
+apagar—, así que si el divisor no da esa corriente no la da nadie. El datasheet
+pide hasta **12 mA a 60 V de diferencial**, que es exactamente la condición de
+la toma alta a 0 V. Es la misma cuenta que en `psu_simple` llevó a poner
+R16 = 100 Ω y a bajar su pote de 5 kΩ a 2k2. Los 240 Ω de las figuras de TI son
+del LM317 de 40 V con diferenciales modestos, no del HV a 59 V.
+
+O sea que la presión va en el sentido **contrario**: 120 Ω ya se queda algo por
+debajo de los 12 mA del caso peor, y margen para subirlo hay poco.
+
+**La solución es el pote, no el circuito.** Y resulta que el pote que aguanta
+420 mW es justo el que hacía falta de todas formas: un **multivuelta de 10
+vueltas**. Con uno de una vuelta, 40 V repartidos en 270° son 0,15 V por grado
+y no hay manera de clavar 12,6 V a mano; con diez vueltas son 11 mV por grado.
+Y los de 10 vueltas son piezas de instrumentación, de 2 W:
+
+| pote | P | margen sobre 2 W |
+|---|---|---|
+| 3k9 con R1 = 120 Ω (este diseño) | 420 mW | 4,8× |
+| 4k7 con R1 = 150 Ω | 323 mW | 6,2× |
+| 5k con R1 = 150 Ω | 344 mW | 5,8× |
+
+Es el mismo margen que ya aceptaste en el shunt (590 mW en 2 W). Dos avisos:
+ese 2 W suele estar especificado a 40 °C y derata hasta 0 a ~120 °C, así que
+dentro de una caja a 60 °C cuenta con ~1,5 W —sigue sobrando—, y **comprueba la
+cifra en el modelo concreto que compres**.
+
+Que sea **bobinado no es problema aquí**: su resolución es del orden del 0,1 %
+del recorrido, o sea ~40 mV sobre 40 V, más fino que el paso de casi cualquier
+fuente digital. Lo que no puede ser bobinado es un pote en serie con la carga,
+y ese no existe en este diseño.
+
+Al cablearlo, **cursor unido al extremo que no se usa**, que es la práctica
+estándar al usar un pote como reóstato: así un cursor sucio deja la pista en
+circuito en vez de dejar R2 al aire. Importa, porque R2 abierto manda la salida
+al tope del raíl.
 
 ## El rizado depende del margen de raíl, y el salto es brusco
 
@@ -494,7 +558,7 @@ elección obvia y es la equivocada).
 | ref | valor | peor caso | escenario | qué comprar |
 |---|---|---|---|---|
 | `Rshunt` | 0,33 Ω | **590 mW** | T1 en corto | **2 W**, hilo bobinado |
-| `R2` (pote de tensión) | 3k9 | **420 mW** | T3 en vacío | **1 W** |
+| `R2` (pote de tensión) | 3k9 | **420 mW** | T3 en vacío | **multivuelta de 2 W**, ver abajo |
 | `Rbleed` | 10k | **349 mW** | T3 en vacío | **1 W** |
 | `Rref` | 2k2 | 41 mW | T1 en vacío | 0,25 W |
 | `R1` | 120 Ω | 13 mW | T2 en corto | 0,25 W |
@@ -505,6 +569,9 @@ elección obvia y es la equivocada).
 Solo tres resistencias se salen de 1/4 W, y las tres por motivos distintos: el
 shunt por el corto, y el pote de tensión y el bleeder porque **trabajan en
 vacío con el raíl alto**, que es la condición que uno no mira.
+
+El pote de tensión es el único de los tres que no se resuelve comprando una
+resistencia más gorda; tiene sección propia más abajo.
 
 ### Semiconductores
 

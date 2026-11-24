@@ -17,7 +17,7 @@ juzga una fuente de banco, los mismos que publican Silicon Chip, Rod Elliott
   escalon     estabilidad: escalon de carga y de consigna, oscilacion
   arranque    sobreimpulso al encender
   proteccion  sobrecarga, cortocircuito, maximo absoluto y temperatura
-  potes       confirma que por los potenciometros no pasa potencia
+  potes       cuanta potencia lleva cada pote y que hay que comprar
 
 El criterio de cada veredicto esta escrito al lado del numero.  Donde no hay
 criterio objetivo se imprime el dato y se calla.
@@ -282,9 +282,10 @@ def sec_proteccion(b):
 
 
 def sec_potes(b):
-    print("== 9. LOS POTENCIOMETROS NO LLEVAN POTENCIA ==")
-    print("   Es el fallo clasico del LM317 como regulador de corriente: el")
-    print("   pote en serie con la carga. Aqui ninguno de los dos la ve.\n")
+    print("== 9. POTENCIA EN LOS POTENCIOMETROS ==")
+    print("   El fallo clasico del LM317 como regulador de corriente es el pote")
+    print("   en serie con la carga; ese no esta.  Pero el pote de TENSION es el")
+    print("   divisor de realimentacion, asi que lleva sus 10,4 mA siempre.\n")
     print(f"   {'escenario':>16}{'R2 (tension)':>15}{'pote I':>12}"
           f"{'shunt':>10}")
     for nombre, kw in (("fondo en vacio", dict(tap=3, vset=1.0, load=1000)),
@@ -294,10 +295,14 @@ def sec_potes(b):
         d, m, q = b.run(f"pot_{nombre[:5]}".replace(" ", ""), iset=1.0, **kw)
         print(f"   {nombre:>16}{q['p_r2']*1000:12.1f} mW"
               f"{q['p_rpot_i']*1000:9.1f} mW{q['p_rshunt']*1000:7.0f} mW")
-    print("\n   R2 es el pote de tension (3k9 / 1 W) y lleva los 10,4 mA del")
-    print("   divisor, no la corriente de carga.  El pote de corriente (4k7)")
-    print("   solo divide la referencia de 2,5 V del TL431: microamperios.")
-    print(f"   Veredicto: {OK} - ninguno necesita ser bobinado.")
+    print("\n   P(R2) = (1,25/R1)*Vout = 10,4 mA * 40,5 V = 420 mW.  Esos 10,4 mA")
+    print("   los fija R1, NO la carga: son los mismos en vacio, a 1 A y en un")
+    print("   corto.  Un unico peor caso, y es el extremo del recorrido.")
+    print("   El pote de corriente (4k7) solo divide los 2,5 V del TL431.")
+    print(f"   Veredicto: {OK} - el de corriente, cualquiera; el de TENSION,")
+    print("   multivuelta de 10 vueltas y >=1 W (los de ese tipo son de 2 W).")
+    print("   Subir R1 para bajar esos 420 mW choca con la corriente minima")
+    print("   de carga, que sale del propio divisor: ver el README.")
 
 
 def sec_esfuerzos(b):
