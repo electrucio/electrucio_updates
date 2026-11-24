@@ -27,6 +27,15 @@
 .param VREF=1.25 VDO=2 IADJ=50u GM=10m CC=10n RINT=1Meg
 
 * corriente del pin de ajuste
+* OJO, DEFECTO CONOCIDO: el sentido de esta fuente esta al reves.  En el chip
+* real la corriente SALE del pin de ajuste y baja por R2, o sea que SUMA
+* I_adj*R2 a la salida (es el segundo termino de la formula de TI).  Puesta
+* como ADJ -> 0, la resta.  El error vale 2*I_adj*R2 -390 mV a fondo de escala
+* con R2 = 3k9- y es el -0,9 % que las tablas de exactitud del README de
+* psu_cvcc le achacan al diseno, no a este modelo.  Comprobado invirtiendola a
+* "Iadj  0 ADJ {IADJ}": el fondo de escala pasa de -0,88 % a +0,07 % contra la
+* formula de TI.  Sin corregir todavia porque re-basa todas las tensiones
+* medidas y publicadas.
 Iadj  ADJ 0 {IADJ}
 
 * limite de corriente plegado por SOA en funcion del diferencial
