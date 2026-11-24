@@ -83,15 +83,20 @@ class Bench:
         self.src.write_text(self.base, encoding="ascii")
 
     def run(self, tag, tap=2, vset=0.5, iset=1.0, load=100, tend=1.5,
-            step="100u", meas_from=1.2):
+            step="100u", meas_from=1.2, tstart=0, vred=325, patches=()):
         n = Netlist.from_file(self.src).absolutize_libs([PSU])
         n.patch(".param TAP=2", f".param TAP={tap}")
         n.patch("Vset VSET 0 0.5", f"Vset VSET 0 {vset}")
         n.patch("Visetadj ISETADJ 0 1", f"Visetadj ISETADJ 0 {iset}")
         n.patch("Vload LOAD 0 100", f"Vload LOAD 0 {load}")
         n.patch(".param TM1=1.2 TM2=1.5", f".param TM1={meas_from} TM2={tend}")
+        if vred != 325:
+            n.patch("V1 LIVE NEUTRAL SINE(0 325 50)",
+                    f"V1 LIVE NEUTRAL SINE(0 {vred} 50)")
+        for a, b in patches:
+            n.patch(a, b)
         n.patch(".tran 0 1.5 0 100u startup uic",
-                f".tran 0 {tend} 0 {step} startup uic")
+                f".tran 0 {tend} {tstart} {step} startup uic")
         n.add(".options plotwinsize=0")
         net = n.write(self.w / f"{tag}.net")
         raw = run_batch(net)
@@ -119,7 +124,7 @@ def case_cv(b: Bench):
     for vs in (0.02, 0.1, 0.3, 0.5, 0.7, 1.0):
         d, m, q = b.run(f"cv_{vs}", tap=3, vset=vs)
         v = q.get("vout_dc", float(np.median(d["V(vout)"][m])))
-        th = 1.25 * (1 + vs * 3900 / 120) + 50e-6 * vs * 3900
+        th = 1.25 * vs * 3900 / 120 + 50e-6 * vs * 3900
         print(f"  {vs*100:5.0f}%{vs*3900:7.0f}R{v:8.2f}V{th:9.2f}V"
               f"{(v-th)/max(th,1)*100:7.1f}%")
 
@@ -146,7 +151,7 @@ def case_ripple(b: Bench):
         maxpote = None
         for vs in (1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.3, 0.15):
             d, m, q = b.run(f"rp{tap}_{vs}", tap=tap, vset=vs, step="20u")
-            ped = 1.25 * (1 + vs * 3900 / 120) + 50e-6 * vs * 3900
+            ped = 1.25 * vs * 3900 / 120 + 50e-6 * vs * 3900
             seco = q["headroom"] < 2.5
             if not seco and maxpote is None:
                 maxpote = (vs, q["vout_dc"])
@@ -168,13 +173,19 @@ def case_ripple(b: Bench):
 
 def case_cc(b: Bench):
     print("== CC: recorrido del pote de corriente (TAP=2, pote de tension 90 %) ==")
-    print(f"  {'pote':>6}{'Iset':>10}{'Rcarga':>8}{'I':>10}{'Vout':>8}{'error':>8}")
+    print(f"  {'pote':>6}{'Iset':>10}{'Rcarga':>8}{'I shunt':>10}"
+          f"{'I carga':>10}{'Vout':>8}{'error':>8}")
     for ia, rl in ((0.05, 220), (0.1, 100), (0.2, 47), (0.4, 22), (0.7, 10), (1.0, 4.7)):
         d, m, q = b.run(f"cc_{ia}", tap=2, vset=0.9, iset=ia, load=rl, tend=2.0,
                         step="200u", meas_from=1.7)
-        i, ith = q["iout_dc"], iset_teorico(ia)
-        print(f"  {ia*100:5.0f}%{ith*1e3:9.1f}m{rl:7}R{i*1e3:9.1f}m"
-              f"{q['vout_dc']:7.2f}V{(i-ith)/ith*100:7.1f}%")
+        # El lazo regula la corriente del SHUNT, y por el shunt vuelve tambien el
+        # divisor R1/R2 (que ahora acaba en VRTN).  Lo que recibe la carga es la
+        # consigna menos I(R2) = (Vout-1,25)/R2, que NO es un offset fijo: son
+        # 10,4 mA con el pote de tension a fondo y menos con el regulador
+        # replegado en CC.  Siempre limita algo ANTES de la consigna.
+        i, il, ith = q["iout_dc"], abs(q["iload_dc"]), iset_teorico(ia)
+        print(f"  {ia*100:5.0f}%{ith*1e3:9.1f}m{rl:7}R{i*1e3:9.1f}m{il*1e3:9.1f}m"
+              f"{q['vout_dc']:7.2f}V{(il-ith)/ith*100:7.1f}%")
 
     print("\n== Transicion CV->CC (TAP=2, 21,5 V pedidos, Iset al maximo) ==")
     print(f"  {'Rcarga':>8}{'I':>9}{'Vout':>9}  modo{'P(317)':>10}")
@@ -203,7 +214,7 @@ def case_short(b: Bench):
 COMPONENTES = [
     ("p_lm317",  "LM317HV (TO-220 + disipador)",   20.0),   # tabla 7.5
     ("p_r2",     "R2  pote de tension 3k9",         1.0),
-    ("p_rshunt", "Rshunt 0,33  -> poner de 3 W",     3.0),
+    ("p_rshunt", "Rshunt 0,33 (2 W por el transitorio)", 2.0),
     ("p_rbleed", "Rbleed 10k",                      1.0),
     ("p_puente", "puente rectificador (4 diodos)",  4.0),
     ("p_r1",     "R1 120",                          0.25),
@@ -219,19 +230,20 @@ COMPONENTES = [
 
 # El vset de los casos "a 1 A" esta elegido para que quede margen de rail con
 # la carga puesta: a plena corriente el rail cae y se pierde ~1,5 V de rango.
+# vset = Vout / 40,625, porque la escala es Vout = 1,25*R2/120 con R2 = vset*3900.
 ESCENARIOS = [
-    ("T1 max vacio", 1, 0.29, 100000),
-    ("T1 11V 1A",    1, 0.25, 11),
-    ("T1 2V 1A",     1, 0.02, 2),
-    ("T1 corto",     1, 0.25, 0.2),
-    ("T2 max vacio", 2, 0.71, 100000),
-    ("T2 27V 1A",    2, 0.65, 27),
-    ("T2 2V 1A",     2, 0.02, 2),
-    ("T2 corto",     2, 0.65, 0.2),
-    ("T3 max vacio", 3, 1.00, 100000),
-    ("T3 39V 1A",    3, 0.95, 39),
-    ("T3 2V 1A",     3, 0.02, 2),
-    ("T3 corto",     3, 0.95, 0.2),
+    ("T1 max vacio", 1, 0.356, 100000),   # 14,5 V, el techo de la toma
+    ("T1 11V 1A",    1, 0.271, 11),
+    ("T1 2V 1A",     1, 0.049, 2),
+    ("T1 corto",     1, 0.271, 0.2),
+    ("T2 max vacio", 2, 0.767, 100000),   # 31,2 V
+    ("T2 27V 1A",    2, 0.665, 27),
+    ("T2 2V 1A",     2, 0.049, 2),
+    ("T2 corto",     2, 0.665, 0.2),
+    ("T3 max vacio", 3, 1.000, 100000),   # 40,6 V
+    ("T3 39V 1A",    3, 0.960, 39),
+    ("T3 2V 1A",     3, 0.049, 2),
+    ("T3 corto",     3, 0.960, 0.2),
 ]
 
 

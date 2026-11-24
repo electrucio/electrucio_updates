@@ -31,6 +31,7 @@ PINS = {
     "diode":   [(16, 0),  (16, 64)],
     "voltage": [(0, 16),  (0, 96)],
     "bi":      [(0, 0),   (0, 80)],
+    "bv":      [(0, 16),  (0, 96)],
     "npn":     [(64, 0),  (0, 48), (64, 96)],
     "sw":      [(0, 16),  (0, 96), (-48, 80), (-48, 32)],
     "LM317HV": [(0, 48),  (64, 0), (-64, 0)],
@@ -45,6 +46,7 @@ LEAD = {
     "diode":   [(0, -1), (0, 1)],
     "voltage": [(0, -1), (0, 1)],
     "bi":      [(0, -1), (0, 1)],
+    "bv":      [(0, -1), (0, 1)],
     "npn":     [(0, -1), (-1, 0), (0, 1)],
     "sw":      [(0, -1), (0, 1), (-1, 0), (-1, 0)],
     "LM317HV": [(0, 1), (1, 0), (-1, 0)],
@@ -170,14 +172,16 @@ place("res", 2300, 640, "Rbleed", "10k",   ["VRAW", "0"])
 place("cap", 2440, 640, "Cin",   "0.1u",   ["VRAW", "0"])
 
 # ================================================ 5. REGULADOR (fig. 16) ======
-block("5. LM317HV:  Vout = 1,25*(1 + R2/R1)")
+block("5. LM317HV:  Vout = 1,25*R2/R1  (0 V con R2 = 0)")
 UX, UY = 2720, 560
 place("LM317HV", UX, UY, "U1", None, ["VADJ", "VOUT", "VRAW"])
 place("res", UX + 180, 680, "R1", "120", ["VOUT", "VADJ"])
-place("res", UX + 180, 880, "R2", "R=V(VSET)*3900", ["VADJ", "0"])
-place("cap", UX + 340, 880, "Cadj", "10u", ["VADJ", "0"])
+place("res", UX + 180, 880, "R2", "R=max(V(VSET)*3900,0.1)", ["VADJ", "VNREF"])
+place("cap", UX + 340, 880, "Cadj", "10u", ["VADJ", "VNEG"])
 place("cap", UX + 480, 680, "Cout", "10u", ["VOUT", "0"])
+place("cap", UX + 500, 880, "Cout_hf", "100n", ["VOUT", "0"])
 label(UX - 60, 460, "R1 = carga minima (10,4 mA).  Cadj -> 80 dB de rechazo (fig. 21).")
+label(UX - 60, 420, "R2 a VNREF = VRTN - 1,25 (cero a 0 V).  Cadj a los -5 V, como Silicon Chip.")
 _touch(UX - 70, 450)
 
 # ==================================== 6. DIODOS DE PROTECCION (fig. 15) =======
@@ -189,7 +193,7 @@ place("diode", 2660, 1300, "D_ADJ", "1N4148", ["VADJ", "VOUT"])
 # =============================================== 7. SALIDA Y SHUNT (fig. 32) ==
 block("7. SALIDA")
 OX = 3440
-place("res", OX, 640, "Rload", "R=limit(V(LOAD),0.2,1Meg)", ["VOUT", "VRTN"])
+place("res", OX, 640, "Rload", "R=limit(V(LOAD),0.01,1Meg)", ["VOUT", "VRTN"])
 place("voltage", OX + 340, 640, "Vload", "100", ["LOAD", "0"])
 place("res", OX, 900, "Rshunt", "0.33", ["VRTN", "0"])
 place("res", OX, 1300, "Rfilt", "1k", ["VRTN", "SENSE"])
@@ -206,6 +210,7 @@ place("TL431ED", 1830, RY + 80, "ref", None, ["VREF25", "0", "VREF25"])
 place("cap", 1980, RY, "Cref", "100n", ["VREF25", "0"])
 place("res", 2180, RY, "Rset", "22k", ["VREF25", "ISET"])
 place("res", 2320, RY, "Rpot_i", "R=V(ISETADJ)*4700", ["ISET", "0"])
+place("cap", 2320, RY + 220, "Cpot_i", "100n", ["ISET", "0"])
 label(1400, RY + 280, "Vaux = trafo auxiliar de 1,5 VA + puente + 7812")
 label(1400, RY + 320, "0..0,44 V en ISET  ->  limite de 0 a 1,33 A")
 _touch(1400, RY + 330)
@@ -213,14 +218,35 @@ _touch(1400, RY + 330)
 # ================================= 9. LAZO DE CORRIENTE (fig. 31 + fig. 32) ===
 block("9. LAZO DE CORRIENTE - el operacional tira de ADJ (fig. 31 + 32)")
 CY = 1980
-place("LM358", 2760, CY, "U2", None, ["SENSE", "CCIN", "VCC", "0", "CCOUT"])
+place("LM358", 2760, CY, "U2", None, ["SENSE", "CCIN", "VCC", "VNEG", "CCOUT"])
 place("res", 2620, CY + 220, "Rint", "10k", ["CCIN", "ISET"])
 place("cap", 2800, CY + 220, "Cint", "1u", ["CCOUT", "CCIN"])
 place("res", 2960, CY, "Rb", "4k7", ["CCOUT", "CCB"])
-place("res", 2960, CY + 220, "Rbe", "10k", ["CCB", "0"])
-place("npn", 3140, CY, "Qcc", "QNPN", ["VADJ", "CCB", "0"])
+place("res", 2960, CY + 220, "Rbe", "10k", ["CCB", "VNEG"])
+place("npn", 3140, CY, "Qcc", "QNPN", ["VADJ", "CCB", "VNEG"])
 label(2620, CY + 460, "Integrador a 16 Hz. Mientras no limita, CCOUT=0 y Qcc esta cortado.")
-_touch(2620, CY + 470)
+label(2620, CY + 500, "Qcc: BC546 (Vceo 65 V). Su colector ve VADJ, hasta 40 V.")
+label(2620, CY + 540, "Emisor y Rbe en VNEG (-5 V): con ellos en la referencia, Qcc se satura.")
+_touch(2620, CY + 510)
+
+# ======================================= 8b. REFERENCIA NEGATIVA =============
+# Es lo que permite bajar a 0 V: el chip mantiene OUT-ADJ = 1,25 V, asi que
+# para que OUT llegue a cero, ADJ tiene que poder bajar a -1,25 V.  La pata de
+# referencia del LM337 va a VRTN (al BORNE), no a masa, para que la caida del
+# shunt siga compensada.  De propina, el lazo de CC ya no tiene suelo: mantiene
+# la consigna hasta el cortocircuito franco.
+block("8b. REFERENCIA NEGATIVA - permite 0 V y CC hasta el corto franco")
+NY = 2520
+place("voltage", 1440, NY, "Vneg",  "-5",   ["VNEG", "0"])
+place("bv",      1640, NY, "Bnref", "V=V(VRTN)-1.25", ["VNREF", "0"])
+place("res",     1840, NY, "Rnbleed", "220", ["0", "VNREF"])
+label(1400, NY + 280, "Vneg  = -5 V del auxiliar (zener), solo para el V- del LM358.")
+label(1400, NY + 320, "Bnref = LM337 a -1,25 V (como el P223): pata de referencia en VRTN.")
+label(1400, NY + 360, "Su corriente vuelve al COMUN, no por el shunt: tension Y corriente exactas.")
+label(1400, NY + 400, "Rnbleed 220 ohm (el valor del P223) le da su carga minima.")
+label(1400, NY + 440, "Qcc NO tira contra esta referencia sino contra los -5 V (como Silicon")
+label(1400, NY + 480, "Chip): contra -1,25 se satura y pierde el CC en un corto franco.")
+_touch(1400, NY + 490)
 
 # ================================================ 10. MANDOS DEL PANEL ========
 block("10. MANDOS")
@@ -240,7 +266,7 @@ place("cap", 380, TY2, "Cth_sa", "20", ["TSINK", "AMB"])
 place("res", 560, TY2, "Rth_js", "2.3", ["Tj", "TSINK"])
 place("cap", 740, TY2, "Cth_js", "0.02", ["Tj", "TSINK"])
 place("bi", 940, TY2, "Bheat",
-      "I=limit((V(VRAW)-V(VOUT))*abs(I(Rshunt)),0,500)", ["AMB", "Tj"],
+      "I=limit((V(VRAW)-V(VOUT))*abs(I(Rshunt)+I(R1)),0,500)", ["AMB", "Tj"],
       window3="24 104")
 label(0, TY2 + 300, "Rth_js 2,3 C/W (TO-220) + Rth_sa 2 C/W (disipador).")
 _touch(0, TY2 + 310)
@@ -270,8 +296,12 @@ label(DX + 900, DY + 64, "Protecciones de sobrecorriente, cortocircuito y")
 label(DX + 900, DY + 96, "sobretemperatura: las NATIVAS del chip.")
 label(DX + 900, DY + 160, "uic NO es opcional: sin el, el .op sale NaN.")
 label(DX + 900, DY + 192, "Los detalles estan en el README del directorio.")
-label(DX + 900, DY + 256, "OJO: el pote llega a 42 V en cualquier toma. Con TAP=1 o")
+label(DX + 900, DY + 256, "OJO 1: el pote llega a 40,6 V en cualquier toma. Con TAP=1 o")
 label(DX + 900, DY + 288, "TAP=2, pasado el tope, el regulador entra en DROPOUT.")
+label(DX + 900, DY + 352, "OJO 2: en TAP=3, en vacio y con la red a 253 V, el diferencial")
+label(DX + 900, DY + 384, "llega a 59,1 V contra los 60 V del MAXIMO ABSOLUTO (8.3.2).")
+label(DX + 900, DY + 416, "NO bajar del 20 % del pote estando en TAP=3.  Decision tomada")
+label(DX + 900, DY + 448, "a sabiendas: tres devanados de 13 V no caben con margen.")
 
 # ====================================== INSTRUMENTACION (fuera del circuito) ==
 # Se reparte en columnas automaticamente para que no se pisen los textos: las
@@ -282,22 +312,26 @@ label(MX, MY - 60, "=== INSTRUMENTACION: los resultados salen en el .log (Ctrl+L
 M = "{TM1} TO {TM2}"
 MEAS = [
     ".param TM1=1.2 TM2=1.5",
-    f".meas TRAN Vout_dc      AVG V(VOUT)                FROM {M}",
-    f".meas TRAN Vout_pp      PP  V(VOUT)                FROM {M}",
-    f".meas TRAN Vout_min     MIN V(VOUT)                FROM {M}",
-    f".meas TRAN Vout_pico    MAX V(VOUT)                FROM 0 TO {{TM2}}",
+    f".meas TRAN Vout_dc      AVG V(VOUT,VRTN)           FROM {M}",
+    f".meas TRAN Vout_pp      PP  V(VOUT,VRTN)           FROM {M}",
+    f".meas TRAN Vout_min     MIN V(VOUT,VRTN)           FROM {M}",
+    f".meas TRAN Vout_pico    MAX V(VOUT,VRTN)           FROM 0 TO {{TM2}}",
     f".meas TRAN Iout_dc      AVG I(Rshunt)              FROM {M}",
+    f".meas TRAN Iload_dc     AVG I(Rload)               FROM {M}",
+    f".meas TRAN I_div        AVG I(R2)                  FROM {M}",
     f".meas TRAN Iout_pp      PP  I(Rshunt)              FROM {M}",
     f".meas TRAN Vraw_dc      AVG V(VRAW)                FROM {M}",
     f".meas TRAN Vraw_pp      PP  V(VRAW)                FROM {M}",
     f".meas TRAN Headroom     MIN V(VRAW)-V(VOUT)        FROM {M}",
     ".meas TRAN Rechazo_dB   PARAM 20*log10(Vraw_pp/max(Vout_pp,1n))",
     f".meas TRAN Vadj_dc      AVG V(VADJ)                FROM {M}",
+    f".meas TRAN Vnref_dc     AVG V(VNREF)               FROM {M}",
     f".meas TRAN Vref_2v5     AVG V(VREF25)              FROM {M}",
     f".meas TRAN V_iset       AVG V(ISET)                FROM {M}",
     f".meas TRAN V_sense      AVG V(SENSE)               FROM {M}",
     f".meas TRAN CCout        AVG V(CCOUT)               FROM {M}",
-    ".meas TRAN En_CC        PARAM if(CCout>0.5,1,0)",
+    f".meas TRAN Ic_Qcc       AVG Ic(Qcc)                FROM {M}",
+    ".meas TRAN En_CC        PARAM if(Ic_Qcc>1m,1,0)",
     ".meas TRAN Ilim_A       PARAM V_iset/0.33",
     f".meas TRAN I_aux        AVG -I(Vaux)               FROM {M}",
     f".meas TRAN Ipk_diodo    MAX I(D_B2)                FROM {M}",
@@ -310,7 +344,7 @@ MEAS = [
     f".meas TRAN P_LM317_pk   MAX (V(VRAW)-V(VOUT))*(I(Rshunt)+I(R1))  FROM {M}",
     f".meas TRAN P_Rshunt     AVG V(VRTN)*I(Rshunt)      FROM {M}",
     f".meas TRAN P_R1         AVG V(VOUT,VADJ)*I(R1)     FROM {M}",
-    f".meas TRAN P_R2         AVG V(VADJ)*I(R2)          FROM {M}",
+    f".meas TRAN P_R2         AVG V(VADJ,VNREF)*I(R2)    FROM {M}",
     f".meas TRAN P_Rbleed     AVG V(VRAW)*I(Rbleed)      FROM {M}",
     f".meas TRAN P_Rsnub      AVG V(NSNUB,ACLO)*I(Rsnub) FROM {M}",
     f".meas TRAN P_Rfilt      AVG V(VRTN,SENSE)*I(Rfilt) FROM {M}",
@@ -318,8 +352,26 @@ MEAS = [
     f".meas TRAN P_Rset       AVG V(VREF25,ISET)*I(Rset) FROM {M}",
     f".meas TRAN P_Rpot_i     AVG V(ISET)*I(Rpot_i)      FROM {M}",
     f".meas TRAN P_Rb         AVG V(CCOUT,CCB)*I(Rb)     FROM {M}",
-    f".meas TRAN P_Rbe        AVG V(CCB)*I(Rbe)          FROM {M}",
-    f".meas TRAN P_Qcc        AVG V(VADJ)*Ic(Qcc)        FROM {M}",
+    f".meas TRAN P_Rbe        AVG V(CCB,VNREF)*I(Rbe)    FROM {M}",
+    f".meas TRAN P_Qcc        AVG V(VADJ,VNEG)*Ic(Qcc)   FROM {M}",
+    f".meas TRAN P_Rint       AVG V(CCIN,ISET)*I(Rint)   FROM {M}",
+    f".meas TRAN P_Rnbleed    AVG V(VNREF)*I(Rnbleed)    FROM {M}",
+    # --- tension de pico sobre cada condensador, arranque incluido ---------
+    f".meas TRAN Vc_bulk      MAX abs(V(VRAW))           FROM 0 TO {{TM2}}",
+    f".meas TRAN Vc_in        MAX abs(V(VRAW))           FROM 0 TO {{TM2}}",
+    f".meas TRAN Vc_snub      MAX abs(V(ACHI,NSNUB))     FROM 0 TO {{TM2}}",
+    f".meas TRAN Vc_adj       MAX abs(V(VADJ,VNEG))      FROM 0 TO {{TM2}}",
+    f".meas TRAN Vc_out       MAX abs(V(VOUT))           FROM 0 TO {{TM2}}",
+    f".meas TRAN Vc_filt      MAX abs(V(SENSE))          FROM 0 TO {{TM2}}",
+    f".meas TRAN Vc_ref       MAX abs(V(VREF25))         FROM 0 TO {{TM2}}",
+    f".meas TRAN Vc_pot_i     MAX abs(V(ISET))           FROM 0 TO {{TM2}}",
+    f".meas TRAN Vc_int_max   MAX V(CCOUT,CCIN)          FROM 0 TO {{TM2}}",
+    f".meas TRAN Vc_int_min   MIN V(CCOUT,CCIN)          FROM 0 TO {{TM2}}",
+    # --- semiconductores ---------------------------------------------------
+    f".meas TRAN Vce_Qcc      MAX V(VADJ,VNEG)           FROM 0 TO {{TM2}}",
+    f".meas TRAN Ipk_D_REV    MAX abs(I(D_REV))          FROM 0 TO {{TM2}}",
+    f".meas TRAN Ipk_D_IN     MAX abs(I(D_IN))           FROM 0 TO {{TM2}}",
+    f".meas TRAN Ipk_D_ADJ    MAX abs(I(D_ADJ))          FROM 0 TO {{TM2}}",
 ]
 LARGAS = [
     f".meas TRAN P_puente     AVG V(ACLO,VRAW)*I(D_B1)+V(ACHI,VRAW)*I(D_B2)"
