@@ -47,3 +47,9 @@ guitar_amplifier/renders/
 # versionarlas seria republicar material de pago y, de paso, esos datos. El
 # fichero vive en local y docs/README.md da la referencia para comprarlo.
 powersupply/psu_cvcc/docs/silicon_chip_45v_8a.pdf
+
+# Curvas del psu_cvcc: las genera tools/ltspice/curvas_psu_cvcc.py a partir del
+# .asc, que SI esta versionado, asi que son material derivado. Los PNG ademas
+# los rasteriza Chrome y pesan ~150 kB cada uno. Se rehacen con
+#   python3 tools/ltspice/curvas_psu_cvcc.py --png
+powersupply/psu_cvcc/curvas/

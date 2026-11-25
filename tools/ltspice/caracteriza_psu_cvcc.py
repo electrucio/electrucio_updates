@@ -43,8 +43,8 @@ OK, MAL, OJO = "OK", "*** MAL ***", "ojo"
 
 def vteorica(frac):
     """Vout de la carga con la referencia de -1,25 V: 1,25*R2/R1."""
-    r2 = frac * 3900
-    return 1.25 * r2 / 120 + 50e-6 * r2
+    r2 = frac * V.R2_TOTAL
+    return 1.25 * r2 / V.R1_TOTAL + 50e-6 * r2
 
 
 def iteorica(frac):
@@ -60,7 +60,7 @@ def borne(d):
 def sec_tension(b):
     print("== 1. REGULACION DE TENSION: recorrido del pote, extremos incluidos ==")
     print("   TAP=3 (la unica toma donde el pote no puede meter al chip en")
-    print("   dropout), carga de 100 ohm.  El error es contra 1,25*R2/120.\n")
+    print("   dropout), carga de 100 ohm.  El error es contra 1,25*R2/R1.\n")
     print(f"   {'pote':>6}{'R2':>9}{'teorico':>10}{'medido':>10}"
           f"{'error':>9}{'error':>9}")
     print(f"   {'':6}{'':9}{'':10}{'':10}{'mV':>9}{'%':>9}")
@@ -72,7 +72,7 @@ def sec_tension(b):
         pct = 100 * err / th if th > 0.05 else float("nan")
         if th > 1:
             peor = max(peor, abs(pct))
-        print(f"   {vs*100:5.0f}%{vs*3900:8.0f}R{th:9.3f}V{me:9.3f}V"
+        print(f"   {vs*100:5.0f}%{vs*V.R2_TOTAL:8.0f}R{th:9.3f}V{me:9.3f}V"
               f"{err*1000:8.0f}m{pct:8.2f}%")
     print(f"\n   Peor error relativo por encima de 1 V: {peor:.2f} %")
     print(f"   Veredicto: {OK if peor < 2 else OJO} "
@@ -214,9 +214,13 @@ def sec_escalon(b):
     _escalon(d, 0.62, 0.72, "salida de CC")
 
     print("\n  --- escalon de consigna de tension (como el Scope9 de SC) ---")
-    pat = [("Vset VSET 0 0.4923",
-            "Vset VSET 0 PWL(0 0.4923 0.5 0.4923 0.500001 0.0123"
-            " 0.62 0.0123 0.620001 0.4923)")]
+    # OJO: hay que mover los DOS mandos.  Si solo se mueve el grueso, el fino
+    # se queda donde estaba y pone un suelo (0,4923 del pote fino son 2,3 V),
+    # asi que el escalon no llega a 0,5 V y la medida miente.
+    pwl_v = ("PWL(0 0.4923 0.5 0.4923 0.500001 0.0123"
+             " 0.62 0.0123 0.620001 0.4923)")
+    pat = [("Vset VSET 0 0.4923", f"Vset VSET 0 {pwl_v}"),
+           ("Vsetf VSETF 0 0.4923", f"Vsetf VSETF 0 {pwl_v}")]
     d, m, q = b.run("e_vset", tap=2, vset=0.4923, iset=1.0, load=22,
                     tend=0.72, tstart=0.45, step="5u", meas_from=0.68,
                     patches=pat)
@@ -284,25 +288,28 @@ def sec_proteccion(b):
 def sec_potes(b):
     print("== 9. POTENCIA EN LOS POTENCIOMETROS ==")
     print("   El fallo clasico del LM317 como regulador de corriente es el pote")
-    print("   en serie con la carga; ese no esta.  Pero el pote de TENSION es el")
-    print("   divisor de realimentacion, asi que lleva sus 10,4 mA siempre.\n")
-    print(f"   {'escenario':>16}{'R2 (tension)':>15}{'pote I':>12}"
-          f"{'shunt':>10}")
+    print("   en serie con la carga; ese no esta.  El de TENSION es el divisor de")
+    print("   realimentacion, asi que lleva la corriente del divisor siempre, pero")
+    print("   con Q_min dando la carga minima esa corriente ya puede ser pequena.\n")
+    print(f"   {'escenario':>16}{'R2c grueso':>14}{'R2f fino':>12}"
+          f"{'pote I':>11}{'shunt':>10}")
     for nombre, kw in (("fondo en vacio", dict(tap=3, vset=1.0, load=1000)),
                        ("20 V a 1 A", dict(tap=2, vset=0.4923, load=19)),
                        ("corto, lim max", dict(tap=2, vset=0.5, load=0.01)),
                        ("0 V en vacio", dict(tap=2, vset=0.0, load=1000))):
         d, m, q = b.run(f"pot_{nombre[:5]}".replace(" ", ""), iset=1.0, **kw)
-        print(f"   {nombre:>16}{q['p_r2']*1000:12.1f} mW"
-              f"{q['p_rpot_i']*1000:9.1f} mW{q['p_rshunt']*1000:7.0f} mW")
-    print("\n   P(R2) = (1,25/R1)*Vout = 10,4 mA * 40,5 V = 420 mW.  Esos 10,4 mA")
-    print("   los fija R1, NO la carga: son los mismos en vacio, a 1 A y en un")
-    print("   corto.  Un unico peor caso, y es el extremo del recorrido.")
-    print("   El pote de corriente (4k7) solo divide los 2,5 V del TL431.")
-    print(f"   Veredicto: {OK} - el de corriente, cualquiera; el de TENSION,")
-    print("   multivuelta de 10 vueltas y >=1 W (los de ese tipo son de 2 W).")
-    print("   Subir R1 para bajar esos 420 mW choca con la corriente minima")
-    print("   de carga, que sale del propio divisor: ver el README.")
+        print(f"   {nombre:>16}{q['p_r2c']*1000:11.1f} mW"
+              f"{q['p_r2f']*1000:9.1f} mW{q['p_rpot_i']*1000:8.1f} mW"
+              f"{q['p_rshunt']*1000:7.0f} mW")
+    pt = 40.5 ** 2 / V.R2_TOTAL
+    print(f"\n   P(pote) = Vmax^2/R2 = 40,5^2/{V.R2_TOTAL} = {pt*1000:.0f} mW en total,")
+    print(f"   repartidos {V.R2_COARSE/V.R2_TOTAL*100:.0f}/{V.R2_FINE/V.R2_TOTAL*100:.0f}")
+    print("   entre grueso y fino.  No depende de la carga: la corriente del")
+    print("   divisor la fija R1, y es la misma en vacio, a 1 A y en un corto.")
+    print("   El pote de corriente solo divide los 2,5 V del TL431: microamperios.")
+    print(f"   Veredicto: {OK} - los dos de PANEL y corrientes.  Lo que lo permite")
+    print("   es Q_min: sin el, R1 tendria que dar la carga minima del chip y")
+    print("   el pote volveria a necesitar 420 mW.  Ver el README.")
 
 
 def sec_esfuerzos(b):
@@ -346,10 +353,14 @@ def sec_esfuerzos(b):
     print("\n  RESISTENCIAS - potencia media en el peor escenario\n")
     print(f"  {'ref':>10}{'valor':>9}{'peor':>10}{'escenario':>12}   compra")
     RES = [("p_rshunt", "Rshunt", "0,33", "2 W, hilo bobinado"),
-           ("p_r2", "R2 (pote V)", "3k9", "1 W"),
+           ("p_r2c", "R2c (pote grueso)", "10k", "0,25 W"),
+           ("p_r2f", "R2f (pote fino)", "1k", "0,125 W"),
+           ("p_q_min", "Q_min (sumidero)", "BD139", "1,25 W"),
+           ("p_re_min", "Re_min", "1k3", "3 W"),
            ("p_rbleed", "Rbleed", "10k", "1 W"),
            ("p_rsnub", "Rsnub", "100", "0,5 W"),
-           ("p_r1", "R1", "120", "0,25 W"),
+           ("p_r1", "R1", "270", "0,25 W"),
+           ("p_tp1", "TP1", "150", "0,25 W"),
            ("p_rref", "Rref", "2k2", "0,25 W"),
            ("p_rset", "Rset", "22k", "0,125 W"),
            ("p_rpot_i", "Rpot_i", "4k7", "0,25 W (pote normal)"),

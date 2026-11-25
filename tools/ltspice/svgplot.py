@@ -102,11 +102,17 @@ def linear_ticks(ax, major, minor=None, fmt=lambda v: f"{v:g}"):
     return out
 
 
-def grid(ax, pal, xticks, ystep=5, ymajor=10, yfmt=lambda v: f"{v:+g}"):
+def grid(ax, pal, xticks, ystep=5, ymajor=10, yfmt=lambda v: f"{v:+g}",
+         yvals=None):
     """Rejilla, marcas exteriores y etiquetas de los dos ejes.
 
     Las marcas salen HACIA FUERA del marco, como en un instrumento: 6 px las
     mayores, 3 px las finas.
+
+    `ystep`/`ymajor` solo valen para ejes de paso ENTERO (dB, voltios).  Para
+    un eje con paso fraccionario -amperios, milisegundos- se pasa `yvals`, una
+    lista de (valor, es_mayor) ya calculada; entonces ystep y ymajor se
+    ignoran.  Es aditivo: sin `yvals` el comportamiento es el de siempre.
     """
     g = []
     for x, lab in xticks:
@@ -118,8 +124,11 @@ def grid(ax, pal, xticks, ystep=5, ymajor=10, yfmt=lambda v: f"{v:+g}"):
         if lab:
             g.append(f'<text x="{x:.1f}" y="{ax.y0+ax.h+24}" class="tick" '
                      f'text-anchor="middle">{lab}</text>')
-    for dv in range(int(ax.d0), int(ax.d1) + 1, ystep):
-        y, major = ax.y(dv), dv % ymajor == 0
+    if yvals is None:
+        yvals = [(dv, dv % ymajor == 0)
+                 for dv in range(int(ax.d0), int(ax.d1) + 1, ystep)]
+    for dv, major in yvals:
+        y = ax.y(dv)
         g.append(f'<line x1="{ax.x0}" y1="{y:.1f}" x2="{ax.x0+ax.w}" y2="{y:.1f}" '
                  f'stroke="{pal["grid"] if major else pal["minor"]}" '
                  f'stroke-width="1"/>')

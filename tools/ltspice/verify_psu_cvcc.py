@@ -83,10 +83,15 @@ class Bench:
         self.src.write_text(self.base, encoding="ascii")
 
     def run(self, tag, tap=2, vset=0.5, iset=1.0, load=100, tend=1.5,
-            step="100u", meas_from=1.2, tstart=0, vred=325, patches=()):
+            step="100u", meas_from=1.2, tstart=0, vred=325, patches=(),
+            vsetf=None):
         n = Netlist.from_file(self.src).absolutize_libs([PSU])
         n.patch(".param TAP=2", f".param TAP={tap}")
         n.patch("Vset VSET 0 0.5", f"Vset VSET 0 {vset}")
+        # el fino sigue al grueso salvo que se pida otra cosa: asi un
+        # vset=X solo sigue significando "X de fondo de escala"
+        n.patch("Vsetf VSETF 0 0.5",
+                f"Vsetf VSETF 0 {vset if vsetf is None else vsetf}")
         n.patch("Visetadj ISETADJ 0 1", f"Visetadj ISETADJ 0 {iset}")
         n.patch("Vload LOAD 0 100", f"Vload LOAD 0 {load}")
         n.patch(".param TM1=1.2 TM2=1.5", f".param TM1={meas_from} TM2={tend}")
@@ -117,6 +122,29 @@ class Bench:
         return out
 
 
+# --- escala del divisor (debe seguir a mkasc_psu_cvcc.py) -------------------
+R2_COARSE, R2_FINE = 10000, 1000
+R2_TOTAL = R2_COARSE + R2_FINE
+R1_TOTAL = 340                      # R1 270 + TP1 a 70
+
+
+# Formula de TI (SNVS773D, ec. 1) con la referencia de -1,25 V abajo:
+#
+#     Vout = 1,25 * R2/R1  +  Iadj * R2
+#
+# El termino de Iadj es un error de GANANCIA constante en todo el recorrido,
+# porque como fraccion de la lectura vale Iadj*R1/1,25: 1,4 % con R1 = 340
+# (eran 0,5 % con R1 = 120).  Deja la salida ALTA, y TP1 lo corrige entero
+# subiendo R1.  Lo que queda es su deriva, unos 55 mV sobre 40 V.
+IADJ_GANANCIA = 50e-6 * R1_TOTAL / 1.25          # 0,0136 = 1,4 %
+
+
+def vout_teorico(frac):
+    """Vout con la referencia de -1,25 V: 1,25*R2/R1 + Iadj*R2 (formula de TI)."""
+    r2 = frac * R2_TOTAL
+    return 1.25 * r2 / R1_TOTAL + 50e-6 * r2
+
+
 # --------------------------------------------------------------------- casos
 def case_cv(b: Bench):
     print("== CV: recorrido del pote de tension (TAP=3, carga 100 ohm) ==")
@@ -124,8 +152,8 @@ def case_cv(b: Bench):
     for vs in (0.02, 0.1, 0.3, 0.5, 0.7, 1.0):
         d, m, q = b.run(f"cv_{vs}", tap=3, vset=vs)
         v = q.get("vout_dc", float(np.median(d["V(vout)"][m])))
-        th = 1.25 * vs * 3900 / 120 + 50e-6 * vs * 3900
-        print(f"  {vs*100:5.0f}%{vs*3900:7.0f}R{v:8.2f}V{th:9.2f}V"
+        th = vout_teorico(vs)
+        print(f"  {vs*100:5.0f}%{vs*R2_TOTAL:7.0f}R{v:8.2f}V{th:9.2f}V"
               f"{(v-th)/max(th,1)*100:7.1f}%")
 
     print("\n== Rango util de cada toma (pote al maximo, carga 100 ohm) ==")
@@ -151,7 +179,7 @@ def case_ripple(b: Bench):
         maxpote = None
         for vs in (1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.3, 0.15):
             d, m, q = b.run(f"rp{tap}_{vs}", tap=tap, vset=vs, step="20u")
-            ped = 1.25 * vs * 3900 / 120 + 50e-6 * vs * 3900
+            ped = vout_teorico(vs)
             seco = q["headroom"] < 2.5
             if not seco and maxpote is None:
                 maxpote = (vs, q["vout_dc"])
@@ -213,11 +241,15 @@ def case_short(b: Bench):
 # clave de .meas -> (etiqueta, potencia nominal del componente que pondria yo)
 COMPONENTES = [
     ("p_lm317",  "LM317HV (TO-220 + disipador)",   20.0),   # tabla 7.5
-    ("p_r2",     "R2  pote de tension 3k9",         1.0),
+    ("p_r2c",    "R2c pote grueso de panel 10k",    0.25),
+    ("p_r2f",    "R2f pote fino de panel 1k",       0.125),
+    ("p_q_min",  "Q_min BD139 (TO-126)",            1.25),
+    ("p_re_min", "Re_min 1k3 (3 W por el fallo)",   3.0),
     ("p_rshunt", "Rshunt 0,33 (2 W por el transitorio)", 2.0),
     ("p_rbleed", "Rbleed 10k",                      1.0),
     ("p_puente", "puente rectificador (4 diodos)",  4.0),
-    ("p_r1",     "R1 120",                          0.25),
+    ("p_r1",     "R1 270",                          0.25),
+    ("p_tp1",    "TP1 trimmer 150",                 0.25),
     ("p_rref",   "Rref 2k2",                        0.25),
     ("p_rsnub",  "Rsnub 100",                       0.5),
     ("p_rfilt",  "Rfilt 1k",                        0.125),
@@ -230,9 +262,15 @@ COMPONENTES = [
 
 # El vset de los casos "a 1 A" esta elegido para que quede margen de rail con
 # la carga puesta: a plena corriente el rail cae y se pierde ~1,5 V de rango.
-# vset = Vout / 40,625, porque la escala es Vout = 1,25*R2/120 con R2 = vset*3900.
+# vset = Vout / 40,4, porque la escala es Vout = 1,25*R2/R1 con R2 = vset*11000
+# y R1 = 340.  Estos vset se eligieron con la escala anterior (40,625): la
+# diferencia es del 0,5 %, irrelevante para lo que miden (margen de rail).
 ESCENARIOS = [
     ("T1 max vacio", 1, 0.356, 100000),   # 14,5 V, el techo de la toma
+    # Estos dos escenarios prueban el TECHO de cada banda a 1 A, que es donde
+    # la regla de los 3 V de margen y la de los 20 W se cruzan.  Si algun dia se
+    # monta el filtro CRC hay que bajarlos ~1 V por el I*R: con 1 ohm se quedan
+    # en 2,03 V de margen, por debajo del dropout del chip.
     ("T1 11V 1A",    1, 0.271, 11),
     ("T1 2V 1A",     1, 0.049, 2),
     ("T1 corto",     1, 0.271, 0.2),
