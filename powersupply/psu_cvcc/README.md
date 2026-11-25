@@ -29,23 +29,62 @@ distinta del diseño, y conviene saber cuál pregunta responde cada una.
 
 | fuente | qué aporta | por qué vale |
 |---|---|---|
-| **TI SNVS773D**, el datasheet del LM317HV | **la topología** | no es «inspiración»: el circuito *es* sus figuras |
+| **TI SNVS773D**, el datasheet **LM117HV/LM317HV** | **la topología** | no es «inspiración»: el circuito *es* sus figuras. [Está en `docs/`](docs/ti_snvs773d_lm117hv_lm317hv.pdf) |
 | **Silicon Chip**, 45 V / 8 A, octubre 2019 | **las decisiones que el datasheet no cubre** | mismo chip y misma topología a diez veces la corriente: cuando ellos resuelven un problema, es el mismo problema |
 | **ESP Project 223** de Rod Elliott | **una sola idea**, la que define el aparato | cómo llegar a 0 V |
+
+**El nombre de la pieza en ese datasheet no es uno, son tres.** El documento se
+titula «LM117HV, LM317HV», la §9.1 habla de «LMx17HV» para la familia, y las
+secciones de aplicación mezclan las dos denominaciones sin criterio: nombran al
+**LM117HV siete veces y al LM317HV tres**. Así que varias de las figuras que
+cita este README —la 16 entre ellas, que es sobre la que está construido todo—
+aparecen escritas con **LM117HV**. No son piezas distintas ni circuitos
+distintos: es la misma pastilla y lo único que cambia es el grado de
+temperatura, dicho por el propio datasheet al pie de sus tablas:
+
+> *«Unless otherwise specified, these specifications apply: −55 °C ≤ TJ ≤
+> +150 °C for the LM117HV, and 0 °C ≤ TJ ≤ +125 °C for the LM317HV»*
+
+Lo que se compra y lo que está en el `.asc` es el **LM317HV**, el grado
+comercial. Si alguien pregunta por qué las figuras dicen otra cosa, la respuesta
+es que es el mismo documento y la misma sección.
 
 Lo más fuerte de la genealogía está en la primera: **de los tres, este es el
 único que monta la figura 32 tal cual**. Silicon Chip sensa en alta con un
 INA282 y Rod Elliott limita en la entrada; aquí se hace lo que dice el
 fabricante.
 
-| bloque | referencia |
-|---|---|
-| Regulador ajustable con R1/R2 | fig. 16, §9.2.1 |
-| Condensador en ADJ para el rechazo de rizado | fig. 21, §9.2.5 (la idea; el **valor** se midió aparte, ver más abajo) |
-| Diodos D_ADJ y D_IN | fig. 15, §8.4.2 y §11.1 |
-| Límite de corriente: shunt en el retorno + NPN que tira de ADJ | fig. 32, §9.2.16 |
-| Operacional atacando la base de ese NPN | fig. 31, §9.2.15 |
-| 0,1 µF a la entrada del regulador | §8.4.1 |
+| bloque | referencia | qué dice TI exactamente |
+|---|---|---|
+| Regulador ajustable con R1/R2 | **fig. 16**, §9.2.1 | *«1.25-V to 45-V High Voltage Adjustable Regulator»*. Ojo: esta sección la escribe con el nombre **LM117HV** (ver abajo) |
+| Condensador en ADJ para el rechazo de rizado | **fig. 21**, §9.2.5 | *«Adjustable Regulator With Improved Ripple Rejection»*. La **idea**; el valor se midió aparte |
+| Diodos `D_ADJ` y `D_IN` | **fig. 15**, §8.4.2 | *«D1 protects against C1, D2 protects against C2»*, y el umbral literal: *«No protection is needed for output voltages of 25 V or less and 10-μF capacitance»* |
+| Límite de corriente: shunt + NPN que tira de ADJ | **fig. 32**, §9.2.16 | *«Current Limited 6-V Charger»*, con la nota al pie *«Sets peak current (0.6 A for 1 Ω)»* — de ahí sale el 0,6 A que se cita más abajo |
+| El **mecanismo** operacional → transistor → ADJ | **fig. 31**, §9.2.15 | ver el aviso justo debajo: esta cita hay que matizarla |
+| 0,1 µF a la entrada del regulador | §8.4.1 | — |
+
+**Dos precisiones sobre estas citas**, las dos encontradas releyendo el
+documento el 25-11-2026 y las dos importantes si hay que defender la genealogía:
+
+1. **La figura 31 no es un limitador de corriente.** Se titula *«Adjustable 4-A
+   Regulator»* y lo que hace es poner **tres LM317HV en paralelo** para dar más
+   corriente, con el operacional fijando la **tensión**: *«Output voltage is set
+   by the variable resistor tied to the non-inverting terminal of the op amp…
+   When output voltage rises, the op amp corrects by drawing current from the
+   base, closing the transistor. This effectively pulls ADJ down»*. Lo que se
+   toma de ella es solo el **mecanismo** —un operacional que gobierna ADJ a
+   través de la base de un transistor—, no la función. La función la da la
+   figura 32. Versiones anteriores de esta tabla decían «operacional atacando la
+   base de ese NPN» sin aclararlo, que se lee como si las dos figuras fuesen
+   partes del mismo limitador, y no lo son.
+
+2. **TI no publica ninguna fuente de banco CV/CC.** Sus dos figuras con límite de
+   corriente, la 30 y la 32, son **cargadores de batería**, y las dos fijan el
+   límite por la Vbe de un transistor contra un shunt. Eso no debilita la
+   genealogía: la refuerza, porque explica *por qué* hubo que inventarse el
+   límite ajustable. Con el límite puesto por una Vbe solo se puede bajar
+   agrandando el shunt, y la propia nota al pie de TI lo cuantifica: 1 Ω para
+   0,6 A. Para llegar a 80 mA harían falta 7,5 Ω, que a 1,3 A son 12,7 W.
 
 **De la fuente de 45 V / 8 A de Silicon Chip:**
 

@@ -6,6 +6,31 @@ rastro de cómo se llegó a él, para no volver a recorrer caminos ya descartado
 Aquí están también las referencias que no se pueden versionar, con lo que hace
 falta para conseguirlas.
 
+## El datasheet de TI — *sí está en el repo*
+
+[`ti_snvs773d_lm117hv_lm317hv.pdf`](ti_snvs773d_lm117hv_lm317hv.pdf), 2,1 MB,
+descargado de <https://www.ti.com/lit/ds/snvs773d/snvs773d.pdf>. Es la
+**referencia primaria** del diseño: el circuito son literalmente sus figuras 16,
+21, 15, 31 y 32. Sí se versiona, al revés que el artículo de Silicon Chip: TI
+distribuye sus datasheets libremente para que sus clientes diseñen con ellos, no
+lleva marca de agua ni datos de comprador, y tenerlo al lado del `.asc` evita
+que las citas de figura se queden huérfanas el día que TI reorganice su web.
+
+**Ojo con el nombre de la pieza.** El documento se titula «LM117HV, LM317HV» y
+las dos son **la misma pastilla**: lo único que cambia es el grado de
+temperatura, y lo dice el propio datasheet al pie de las tablas de
+características:
+
+> *«Unless otherwise specified, these specifications apply: −55 °C ≤ TJ ≤
+> +150 °C for the LM117HV, and 0 °C ≤ TJ ≤ +125 °C for the LM317HV»*
+
+TI además mezcla las dos denominaciones de forma inconsistente dentro del mismo
+documento: en las secciones de aplicación nombra al **LM117HV siete veces y al
+LM317HV tres**, y la §9.1 usa un tercer nombre, «LMx17HV», para la familia. Así
+que **la figura 16 —sobre la que está construido todo el diseño— dice
+«LM117HV»**, y no es un circuito distinto: es la misma sección §9.2.1 del mismo
+documento. Lo que se compra es el LM317HV, que es el grado comercial.
+
 ## El artículo de Silicon Chip — *no está en el repo*
 
 «45 V, 8 A Bench Power Supply to build», *Silicon Chip*, octubre de 2019,
