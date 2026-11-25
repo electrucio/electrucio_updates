@@ -234,16 +234,25 @@ TAP=3, carga de 100 Ω:
 
 | pote | R2 | teórico | medido | error |
 |---|---|---|---|---|
-| 0 % | 0 Ω | 0 V | **0,006 V** | — |
-| 1 % | 110 Ω | 0,410 V | 0,417 V | +7 mV |
-| 3 % | 330 Ω | 1,230 V | 1,240 V | +10 mV |
-| 10 % | 1k1 | 4,099 V | 4,120 V | +21 mV |
-| 50 % | 5k5 | 20,496 V | 20,548 V | +53 mV |
-| 100 % | 11k | 40,991 V | **41,020 V** | **+28 mV (0,07 %)** |
+| 0 % | 0 Ω | 0 V | **−0,002 V** | — |
+| 1 % | 110 Ω | 0,410 V | 0,404 V | −5 mV |
+| 3 % | 330 Ω | 1,230 V | 1,227 V | −2 mV |
+| 10 % | 1k1 | 4,099 V | 4,107 V | +8 mV |
+| 50 % | 5k5 | 20,496 V | 20,535 V | +40 mV |
+| 100 % | 11k | 40,991 V | **41,007 V** | **+16 mV (0,04 %)** |
 
-Lo que queda es un **offset de decenas de milivoltios**, no un error de
-ganancia: en porcentaje *baja* según subes el mando (0,83 % a 1,2 V, 0,07 % a
-fondo de escala). El cero es cero de verdad: 6 mV con los potes al mínimo.
+Lo que queda es un **offset de milivoltios**, no un error de ganancia, y encima
+cambia de signo por el camino: negativo hasta los 2 V y positivo a partir de
+ahí. **El peor error relativo por encima de 1 V es del 0,25 %.** El cero es cero
+de verdad: −2 mV con los potes al mínimo.
+
+Estas cifras mejoraron al sustituir la fuente conductual de la referencia
+negativa por el **LM337 de verdad** (modelo de TI) el 25-11-2026: el peor error
+relativo pasó de 0,83 % a 0,25 % y el offset de fondo de escala de +28 a
++16 mV. No es mérito del diseño: el modelo de TI da −1,262 V en vez de −1,250
+clavados, o sea el ~1 % de desvío típico de la pieza, y ese desvío cae justo en
+contra del sesgo positivo que tenía el divisor. Con otra unidad podría caer a
+favor.
 
 Ojo con las tablas de este tipo en versiones anteriores de este README: daban
 un error de ganancia de −0,9 % que no era del diseño sino de `LM317HV.sub`, que
@@ -261,10 +270,20 @@ salida:
 
 | ajuste | vacío | con carga | I | caída | regulación | Zo |
 |---|---|---|---|---|---|---|
-| 0,5 V | 0,509 V | 0,509 V | 0,51 A | 0,4 mV | **0,09 %** | 0,9 mΩ |
-| 5 V | 5,061 V | 5,060 V | 0,51 A | 1,5 mV | **0,03 %** | 3,0 mΩ |
-| 20 V | 20,205 V | 20,198 V | 0,92 A | 7,5 mV | **0,04 %** | 8,4 mΩ |
-| fondo | 41,031 V | 41,012 V | 0,87 A | 18,8 mV | **0,05 %** | 22,6 mΩ |
+| 0,5 V | 0,497 V | 0,494 V | 0,49 A | 2,4 mV | **0,48 %** | 4,9 mΩ |
+| 5 V | 5,049 V | 5,045 V | 0,51 A | 3,4 mV | **0,07 %** | 6,9 mΩ |
+| 20 V | 20,193 V | 20,182 V | 0,92 A | 11,1 mV | **0,05 %** | 12,4 mΩ |
+| fondo | 41,018 V | 40,996 V | 0,87 A | 21,6 mV | **0,05 %** | 26,0 mΩ |
+
+**Esta tabla es una cota pesimista, no una medida.** Empeoró al poner el LM337
+real (antes: 0,09 / 0,03 / 0,04 / 0,05 %), y el empeoramiento se explica entero
+por un término del modelo de TI, `V(OUT)/(V(OUT)−V(ADJ))`, que da por hecho que
+`ADJ` anda cerca de masa. Aquí `ADJ` va al **borne**, así que sube con la caída
+del shunt y ese cociente mete 7 mV de deriva en la referencia por los 0,44 V de
+recorrido. Las cuentas cuadran en los cuatro ajustes, pero el término es
+matemáticamente sospechoso —va a singularidad—, así que lo más probable es que
+la pieza real sea mejor que esto. Está todo explicado en la cabecera de
+[`LM337_N_TRANS.LIB`](LM337_N_TRANS.LIB), y se decide midiendo.
 
 Para comparar, la única cifra publicada de las tres fuentes de referencia:
 Silicon Chip declara **<0,5 %** en su fuente de 30 V / 2 A. Del P223 no hay dato
@@ -277,11 +296,11 @@ Red a ±10 %, TAP=2, 20 V, 22 Ω:
 
 | red | VRAW | Vout | rizado |
 |---|---|---|---|
-| 207 V | 27,5 V | 20,192 V | 1,95 mV |
-| 230 V | 31,1 V | 20,198 V | 1,98 mV |
-| 253 V | 34,6 V | 20,204 V | 2,01 mV |
+| 207 V | 27,9 V | 20,176 V | 1,97 mV |
+| 230 V | 31,4 V | 20,182 V | 2,00 mV |
+| 253 V | 34,9 V | 20,188 V | 2,03 mV |
 
-**11,8 mV** en total = 0,058 %, que sobre los 7 V que se mueve el raíl son
+**11,9 mV** en total = 0,059 %, que sobre los 7 V que se mueve el raíl son
 0,008 %/V. El datasheet promete 0,01 %/V típico (§7.5).
 
 ### Exactitud de la corriente
@@ -847,9 +866,9 @@ respuesta es que en régimen sí y en transitorio no, y por mucho.
 | | **psu_cvcc** (simulado) | HP/Agilent E3610A | Rigol DP832 | Korad KA3005P |
 |---|---|---|---|---|
 | Rango | 0–40,5 V / 1,34 A | 0–8 V/3 A ó 0–35 V/0,85 A | 0–30 V / 3 A ×2 | 0–30 V / 5 A |
-| Regulación de carga | **0,04 %** (7,5 mV a 20 V) | <0,01 % + 2 mV | <0,01 % + 2 mV | ≤0,01 % + 2 mV |
-| Regulación de línea | **0,058 %** a ±10 % de red | 0,01 % | <0,01 % + 2 mV | — |
-| Rizado de salida | **1,98 mV p-p** (solo 100 Hz, simulado) | <200 µV rms, <2 mV p-p | <350 µV rms, <2 mV p-p | ≤1–2 mV rms |
+| Regulación de carga | **0,05 %** (11,1 mV a 20 V, cota pesimista) | <0,01 % + 2 mV | <0,01 % + 2 mV | ≤0,01 % + 2 mV |
+| Regulación de línea | **0,059 %** a ±10 % de red | 0,01 % | <0,01 % + 2 mV | — |
+| Rizado de salida | **2,00 mV p-p** (solo 100 Hz, simulado) | <200 µV rms, <2 mV p-p | <350 µV rms, <2 mV p-p | ≤1–2 mV rms |
 | **Recuperación ante escalón** | **0,66 ms** | **<50 µs a ±10 mV** | **<50 µs a ±15 mV** | sin dato |
 | Exactitud de corriente | 0,10 % peor, 0,00–0,05 % típico | — | <0,01 % + 250 µA | ≤0,1 % + 5 mA |
 | CC de 10 Ω al corto | **0,00 mA de desviación** | — | — | — |

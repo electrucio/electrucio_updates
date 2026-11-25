@@ -85,6 +85,7 @@ VNRAW = -17                 # bruto del auxiliar, antes del 79L05
 # 11,3 dB a cambio de 11x mas lento.  Con 1 uF el rizado se queda en 2 mV p-p,
 # que es lo que especifican las comerciales, y el establecimiento baja de 174 a
 # 15,6 ms.  Silicon Chip, con el mismo chip, usa 100 nF por este mismo motivo.
+VREF_NEG = "VREF_-1v25"       # el nodo dice su valor: -1,25 V bajo VRTN
 CADJ = "1u"                 # 10u en las versiones anteriores a 2026-11-25
 
 # Filtro CRC del deposito, como el del ESP Project 223 (2x2200 uF con 1 ohm/5 W
@@ -130,6 +131,7 @@ PINS = {
     "npn":     [(64, 0),  (0, 48), (64, 96)],
     "sw":      [(0, 16),  (0, 96), (-48, 80), (-48, 32)],
     "LM317HV": [(0, 48),  (64, 0), (-64, 0)],
+    "LM337":   [(0, 48),  (64, 0), (-64, 0)],
     "LM358":   [(-32, 16), (-32, -16), (0, -32), (0, 32), (32, 0)],
     "TL431ED": [(0, -64), (0, 64), (-48, 40)],
     # Rotativo 1P3T de Bordodynov.  Pin 1 = comun (derecha); 2, 3 y 4 = las
@@ -149,6 +151,7 @@ LEAD = {
     "npn":     [(0, -1), (-1, 0), (0, 1)],
     "sw":      [(0, -1), (0, 1), (-1, 0), (-1, 0)],
     "LM317HV": [(0, 1), (1, 0), (-1, 0)],
+    "LM337":   [(0, 1), (1, 0), (-1, 0)],
     "LM358":   [(-1, 0), (-1, 0), (0, -1), (0, 1), (1, 0)],
     "TL431ED": [(0, -1), (0, 1), (-1, 0)],
     "1P3T_":   [(1, 0), (-1, 0), (-1, 0), (-1, 0), (0, -1)],
@@ -448,7 +451,7 @@ block("5. LM317HV:  Vout = 1,25*(R2c+R2f)/R1  (0 V con el pote a cero)")
 UX, UY = 2720, 560
 # --- el divisor, dibujado como la escalera que es -------------------------
 # Primer bloque cableado con HILOS en vez de solo con etiquetas.  Las etiquetas
-# se quedan: VOUT y VRAW cruzan a otros bloques, y VR1T / VADJ / VMIDP / VNREF
+# se quedan: VOUT y VRAW cruzan a otros bloques, y VR1T / VADJ / VMIDP / VREF_-1v25
 # son puntos de PRUEBA que usan las .meas de potencia (igual que los TP1-TP6 de
 # Silicon Chip).  Los hilos no cambian el netlist -unen pines que ya estaban en
 # la misma red-, solo hacen visible la topologia en vez de dejarla implicita en
@@ -469,7 +472,7 @@ tp1 = place("res", UX + 180, 744, "TP1", str(R1_TRIM), [None, "VADJ"])
 r2c = place("res", UX + 180, 888, "R2c", f"R=max(V(VSET)*{R2_COARSE},0.1)",
             [None, "VMIDP"])
 r2f = place("res", UX + 180, 1032, "R2f", f"R=max(V(VSETF)*{R2_FINE},0.1)",
-            [None, "VNREF"])
+            [None, "VREF_-1v25"])
 # Cadj va DEBAJO de U1, en el hueco que deja el chip, no a la derecha de la
 # escalera: alli chocaba con Cout_hf y con el texto del valor de R2c.
 cadj = place("cap", UX + 40, 904, "Cadj", CADJ, [None, "VNEG"])
@@ -489,7 +492,7 @@ cout = place("cap", UX + 380, 592, "Cout", "10u", [None, "0"])
 couthf = place("cap", UX + 500, 592, "Cout_hf", "100n", [None, "0"])
 label(UX - 60, 400, f"R2c+R2f = dos potes de PANEL en serie ({R2_COARSE//1000}k"
                     f" grueso + {R2_FINE} fino), {40.5**2/R2_TOTAL*1000:.0f} mW en total.")
-label(UX - 60, 360, "R2 a VNREF = VRTN - 1,25 (cero a 0 V).  Cadj a -5 V (S.Chip): 80 dB (fig. 21).")
+label(UX - 60, 360, "R2 a VREF_-1v25 = VRTN - 1,25 (cero a 0 V).  Cadj a -5 V (S.Chip): 80 dB (fig. 21).")
 label(UX - 60, 320, f"R1+TP1 = {R1_TOTAL} ohm fija la ESCALA, no la carga minima:"
                     f" de eso se encarga Q_min.")
 label(UX - 60, 280, "TP1 ajusta el fondo de escala (potes de panel: +-20 %).  Subirla lo baja.")
@@ -622,7 +625,7 @@ RY = 1980
 # En horizontal, como estaba, no se distinguia una cosa de la otra.
 RX = 1640
 vaux = place("voltage", 1440, RY, "Vaux", "12", ["VCC", None])
-rref = place("res", RX, RY, "Rref", "2k2", [None, "VREF25"])
+rref = place("res", RX, RY, "Rref", "2k2", [None, "VREF_2v5"])
 tl = place("TL431ED", RX + 16, RY + 224, "ref", None, [None, None, None])
 cref = place("cap", RX + 160, RY + 160, "Cref", "100n", [None, None])
 rset = place("res", 2180, RY + 144, "Rset", "22k", [None, None])
@@ -710,24 +713,31 @@ block("8b. REFERENCIA NEGATIVA - permite 0 V y CC hasta el corto franco")
 # Bajado de 2520 a 2800: el bloque 8 crece hacia aqui y no puede subir,
 # porque encima tiene los diodos de proteccion.
 NY = 2800
-nraw = place("voltage", 1240, NY, "Vnraw", str(VNRAW), ["VNRAW", None])
-nneg = place("voltage", 1440, NY, "Vneg",  "-5",   ["VNEG", None])
-nref = place("bv",      1700, NY, "Bnref", "V=V(VRTN)-1.25", ["VNREF", None])
-# Girada 180: asi su pin 1 queda abajo (a masa) y el 2 arriba (a VNREF), que
-# es el orden que ya tenia el netlist.  Una resistencia es simetrica, pero no
-# merece la pena gastar la prueba de equivalencia en una diferencia que no lo es.
-nble = place("res",     1876, NY + 112, "Rnbleed", "220", [None, None],
+# AQUI ESTABA Bnref, una fuente conductual V=V(VRTN)-1.25.  Ahora esta el
+# LM337 de verdad, que es lo que lleva el P223: ADJ atado a VRTN y OUT dando
+# VRTN - 1,25 V.  El modelo es el de TI (ver LM337.sub y LM337_N_TRANS.LIB).
+# Se dibuja como la cadena que es: el bruto de -17 V entra por IN, sale por OUT
+# a la izquierda del bleeder, y ADJ cuelga hacia abajo hasta su etiqueta.
+# Igual que el LM317, NO TIENE PATA DE MASA: su corriente sale por IN.
+nneg = place("voltage", 1240, NY, "Vneg",  "-5",   ["VNEG", None])
+nraw = place("voltage", 1440, NY, "Vnraw", str(VNRAW), ["VNRAW", None])
+lm337 = place("LM337", 1700, NY - 16, "U3", None, [None, None, None])
+# Girada 180: asi su pin 1 queda abajo (a masa) y el 2 arriba (a la
+# referencia), que es el orden que ya tenia el netlist.
+nble = place("res",     1976, NY + 112, "Rnbleed", "220", [None, VREF_NEG],
              rot="R180")
 
-wire(nref[0], nble[1])                    # el bleeder, en paralelo con Bnref
+wire(nraw[0], lm337[2])                   # el bruto de -17 V entra por IN
+wire(lm337[1], nble[1])                   # OUT -> el bleeder, su carga minima
+tag(lm337[0], "VRTN")                     # la referencia va al BORNE, no a masa
 
 GND_NEG = NY + 200
-for pie in (nraw[1], nneg[1], nref[1], nble[0]):
+for pie in (nneg[1], nraw[1], nble[0]):
     wire(pie, (pie[0], GND_NEG))
     tag((pie[0], GND_NEG), "0")
 label(1400, NY + 240, "Vnraw = bruto del auxiliar (-17 V), ANTES del 79L05: el retorno de Q_min.")
 label(1400, NY + 280, "Vneg  = -5 V del auxiliar (79L05), V- del LM358 y base de Q_min.")
-label(1400, NY + 320, "Bnref = LM337 a -1,25 V (como el P223): pata de referencia en VRTN.")
+label(1400, NY + 320, "U3 = LM337 a -1,25 V (como el P223): pata de referencia en VRTN.")
 label(1400, NY + 360, "Su corriente vuelve al COMUN, no por el shunt: tension Y corriente exactas.")
 label(1400, NY + 400, "Rnbleed 220 ohm (el valor del P223) le da su carga minima.")
 label(1400, NY + 440, "Qcc NO tira contra esta referencia sino contra los -5 V (como Silicon")
@@ -820,7 +830,7 @@ wire(qcc[0], (3264, 872), (3036, 872))    # Qcc tira de ADJ
 DX, DY = -400, 3360
 label(DX, DY - 60, "=== DIRECTIVAS ===")
 directive(DX, DY, ".param TAP=2")
-directive(DX, DY + 32, ".lib 1P3T_.sub")
+directive(DX, DY + 32, ".lib 1P3T_.sub\\n.lib LM337.sub")
 directive(DX, DY + 64, "K1 Lp1 Ls1 0.999\\nK2 Lp2 Ls2 0.999\\nK3 Lp3 Ls3 0.999")
 directive(DX, DY + 160, ".global Tj")
 directive(DX, DY + 192,
@@ -869,8 +879,8 @@ MEAS = [
     f".meas TRAN Headroom     MIN V(VRAW)-V(VOUT)        FROM {M}",
     ".meas TRAN Rechazo_dB   PARAM 20*log10(Vraw_pp/max(Vout_pp,1n))",
     f".meas TRAN Vadj_dc      AVG V(VADJ)                FROM {M}",
-    f".meas TRAN Vnref_dc     AVG V(VNREF)               FROM {M}",
-    f".meas TRAN Vref_2v5     AVG V(VREF25)              FROM {M}",
+    f".meas TRAN Vnref_dc     AVG V(VREF_-1v25)               FROM {M}",
+    f".meas TRAN Vref_2v5_dc  AVG V(VREF_2v5)              FROM {M}",
     f".meas TRAN V_iset       AVG V(ISET)                FROM {M}",
     f".meas TRAN V_sense      AVG V(SENSE)               FROM {M}",
     f".meas TRAN CCout        AVG V(CCOUT)               FROM {M}",
@@ -890,7 +900,7 @@ MEAS = [
     f".meas TRAN P_R1         AVG V(VOUT,VR1T)*I(R1)     FROM {M}",
     f".meas TRAN P_TP1        AVG V(VR1T,VADJ)*I(RTP1)   FROM {M}",
     f".meas TRAN P_R2c        AVG V(VADJ,VMIDP)*I(R2c)   FROM {M}",
-    f".meas TRAN P_R2f        AVG V(VMIDP,VNREF)*I(R2f)  FROM {M}",
+    f".meas TRAN P_R2f        AVG V(VMIDP,VREF_-1v25)*I(R2f)  FROM {M}",
     f".meas TRAN I_min        AVG Ic(Q_min)              FROM {M}",
     ".meas TRAN I_minload    PARAM I_div+I_min",
     f".meas TRAN P_Q_min      AVG V(VOUT,EMIN)*Ic(Q_min) FROM {M}",
@@ -899,14 +909,14 @@ MEAS = [
     f".meas TRAN P_Rbleed     AVG V(VRAW)*I(Rbleed)      FROM {M}",
     f".meas TRAN P_Rsnub      AVG V(NSNUB,ACLO)*I(Rsnub) FROM {M}",
     f".meas TRAN P_Rfilt      AVG V(VRTN,SENSE)*I(Rfilt) FROM {M}",
-    f".meas TRAN P_Rref       AVG V(VCC,VREF25)*I(Rref)  FROM {M}",
-    f".meas TRAN P_Rset       AVG V(VREF25,ISET)*I(Rset) FROM {M}",
+    f".meas TRAN P_Rref       AVG V(VCC,VREF_2v5)*I(Rref)  FROM {M}",
+    f".meas TRAN P_Rset       AVG V(VREF_2v5,ISET)*I(Rset) FROM {M}",
     f".meas TRAN P_Rpot_i     AVG V(ISET)*I(Rpot_i)      FROM {M}",
     f".meas TRAN P_Rb         AVG V(CCOUT,CCB)*I(Rb)     FROM {M}",
     f".meas TRAN P_Rbe        AVG V(CCB,VNEG)*I(Rbe)     FROM {M}",
     f".meas TRAN P_Qcc        AVG V(VADJ,VNEG)*Ic(Qcc)   FROM {M}",
     f".meas TRAN P_Rint       AVG V(CCIN,ISET)*I(Rint)   FROM {M}",
-    f".meas TRAN P_Rnbleed    AVG V(VNREF)*I(Rnbleed)    FROM {M}",
+    f".meas TRAN P_Rnbleed    AVG V(VREF_-1v25)*I(Rnbleed)    FROM {M}",
     # --- tension de pico sobre cada condensador, arranque incluido ---------
     f".meas TRAN Vc_bulk      MAX abs(V(VRAW))           FROM 0 TO {{TM2}}",
     f".meas TRAN Vc_in        MAX abs(V(VRAW))           FROM 0 TO {{TM2}}",
@@ -914,7 +924,7 @@ MEAS = [
     f".meas TRAN Vc_adj       MAX abs(V(VADJ,VNEG))      FROM 0 TO {{TM2}}",
     f".meas TRAN Vc_out       MAX abs(V(VOUT))           FROM 0 TO {{TM2}}",
     f".meas TRAN Vc_filt      MAX abs(V(SENSE))          FROM 0 TO {{TM2}}",
-    f".meas TRAN Vc_ref       MAX abs(V(VREF25))         FROM 0 TO {{TM2}}",
+    f".meas TRAN Vc_ref       MAX abs(V(VREF_2v5))         FROM 0 TO {{TM2}}",
     f".meas TRAN Vc_pot_i     MAX abs(V(ISET))           FROM 0 TO {{TM2}}",
     f".meas TRAN Vc_int_max   MAX V(CCOUT,CCIN)          FROM 0 TO {{TM2}}",
     f".meas TRAN Vc_int_min   MIN V(CCOUT,CCIN)          FROM 0 TO {{TM2}}",

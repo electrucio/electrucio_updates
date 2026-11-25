@@ -1,0 +1,18 @@
+* ----------------------------------------------------------------------------
+* LM337 - envoltorio sobre el modelo de TI
+*
+* El modelo de TI lleva los pines en el orden IN ADJ OUT, pero en este proyecto
+* el LM317HV los tiene en ADJ OUT IN.  Dos convenciones distintas para las dos
+* piezas complementarias es una trampa segura, asi que aqui se reordenan y
+* todos los reguladores del esquema quedan igual.
+*
+* El modelo de verdad, con su aviso de copyright y el unico cambio que hizo
+* falta para LTspice, esta en LM337_N_TRANS.LIB.
+*
+* Pines, igual que LM317HV.sub:  ADJ  OUT  IN
+* ----------------------------------------------------------------------------
+.include LM337_N_TRANS.LIB
+
+.subckt LM337 ADJ OUT IN
+XU IN ADJ OUT LM337_N_TRANS
+.ends LM337

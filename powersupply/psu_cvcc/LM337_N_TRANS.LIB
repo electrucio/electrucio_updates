@@ -1,0 +1,169 @@
+* ----------------------------------------------------------------------------
+* LM337_N_TRANS de Texas Instruments, con UN cambio para que corra en LTspice.
+*
+* Original: https://www.ti.com/lit/zip/SNVMAP4  (LM337_N_TRANS.LIB, 31MAR2016).
+* Encontrado con el indice: electrucio.github.io/spicy-electronics-index/?part=LM337
+*
+* EL CAMBIO, linea E_ABM1.  TI lo escribe para PSPICE con LLAVES DOBLES:
+*     VALUE { {MAX(V(VXX), (V(Vzz)+(ILIM*ROUT)))}    }
+* y LTspice evalua el { } interior como expresion de PARAMETROS en tiempo de
+* lectura, donde V(VXX) no existe todavia:
+*     Error: undefined symbol in: "max([v](vxx),(v(vzz)+((ilim)*(rout))))"
+* Quitadas las llaves interiores, nada mas.  El resto del fichero es textual.
+*
+* QUE APORTA sobre un modelo conductual propio (medido, barriendo la carga de
+* 0,1 a 50 mA con ADJ a masa y -17 V de entrada):
+*   - da -1,262 V en vez de -1,250 V clavados, o sea el ~1 % de desvio tipico
+*     de la pieza real.  Entra de sobra en el +-3 % del datasheet;
+*   - tiene regulacion de carga (0,6 mV de 0,1 a 50 mA) en vez de ninguna;
+*   - converge el .op sin trucos, que es lo que decidio la eleccion.
+* Modela ademas PSRR, limite de corriente (2,2 A), dropout contra Iout y UVLO;
+* en ESTE circuito nada de eso se ejercita, porque la entrada es una fuente
+* ideal y la carga son 9,4 mA fijos.
+*
+* LO QUE SIGUE SIN MODELAR, y es el unico riesgo real aqui: la CORRIENTE MINIMA
+* DE CARGA.  Aqui la carga son Rnbleed (1,25/220 = 5,7 mA) mas el divisor
+* (1,25/340 = 3,7 mA) = 9,4 mA, y el LM337 de 1,5 A pide 10 mA garantizados
+* (el LM317, 3,5): JUSTO POR DEBAJO.  Comprobado barriendo la carga de 0,1 a
+* 50 mA que ni este modelo ni uno conductual propio lo delatan.
+*
+* PERO: este modelo es el del LM337 de 1,5 A, y el README de este proyecto
+* especifica el LM337L en TO-92 por disipacion (164 mW de unos 600).  Son dos
+* piezas con DISTINTA corriente minima, y la de la version L es menor.  O sea
+* que antes de tocar Rnbleed hay que leer el datasheet de la pieza que se vaya a
+* montar de verdad; si acaba siendo la de 1,5 A, bajar Rnbleed a ~120 ohm deja
+* la carga en 14 mA y se acabo la duda.  En cualquier caso es una comprobacion
+* de PAPEL mas una medida en la unidad construida, no de simulacion.
+*
+* DOS COSAS DEL MODELO QUE HAY QUE SABER, porque este circuito lo usa de una
+* forma que TI probablemente no previo: con ADJ FLOTANDO en VRTN (el borne), no
+* atado a masa.  Las dos salen de esta linea:
+*     E_U1_ABM4  U1_N09035 0 VALUE { V(U1_REF)*(V(OUT)+1e-6)/((V(OUT)-V(ADJ))+1e-6) }
+* que es un COCIENTE y da por hecho que ADJ anda cerca de cero.
+*
+* 1) SE ENGANCHA si el .op arranca con ADJ ya levantado.  Medido fijando ADJ y
+*    corriendo: a 0 / 0,05 / 0,1 V da -1,262 / -1,263 / -1,264 V, bien; a partir
+*    de 0,163 V la salida se queda PEGADA A 0 V y OUT-ADJ sale -0,161 / -0,296 /
+*    -0,433 segun donde este ADJ.  Es un estado estable: al irse OUT a cero el
+*    numerador del cociente se anula y con el la realimentacion.
+*    NO le pasa al circuito, porque este arranca en vacio (VRTN = 0) y VRTN sube
+*    despues con la carga: rampando ADJ de 0 a 0,44 V da -1,2625, -1,2638,
+*    -1,2646, -1,2669 y -1,2697, correcto de punta a punta.  Pero si alguien
+*    simula partiendo de corriente ya establecida, que mire V(VREF_-1v25).
+*
+* 2) LOS 7 mV DE DERIVA de esa misma rampa (-1,2625 a -1,2697 mientras ADJ sube
+*    0,44 V) son 1,6 % de sensibilidad al ADJ, y SON LA CAUSA de que la
+*    regulacion de carga empeore respecto a la fuente conductual que habia
+*    antes: a 0,5 V de consigna y 0,494 A, VRTN sube 0,163 V, la referencia
+*    deriva ~2 mV y la caida medida es de 2,4 mV (antes 0,4 mV); a 20 V y
+*    0,917 A, VRTN sube 0,303 V, derivan ~4 mV y la caida pasa de 7,5 a 11,1 mV.
+*    Cuadra en los dos casos.
+*    OJO CON COMO SE LEE ESO: viene entera del cociente de arriba, que es
+*    matematicamente sospechoso (va a singularidad), asi que lo mas probable es
+*    que sea ARTEFACTO y que la pieza real sea mejor que esta cifra.  Las
+*    columnas de regulacion de carga del README se leen como COTA PESIMISTA, no
+*    como medida.  Para saberlo de verdad: medirlo en el banco.
+* ----------------------------------------------------------------------------
+*$
+*LM337-N_TRANS
+*****************************************************************************
+* (C) Copyright 2015 Texas Instruments Incorporated. All rights reserved.
+*****************************************************************************
+** This model is designed as an aid for customers of Texas Instruments.
+** TI and its licensors and suppliers make no warranties, either expressed
+** or implied, with respect to this model, including the warranties of
+** merchantability or fitness for a particular purpose. The model is
+** provided solely on an "as is" basis. The entire risk as to its quality
+** and performance is with the customer
+*****************************************************************************
+*
+** Released by: WEBENCH Design Center, Texas Instruments Inc.
+* Part: LM337-N
+* Date: 31MAR2016 
+* Model Type: Transient
+* Simulator: PSPICE
+* Simulator Version: 16.2.0.p001
+* EVM Order Number: 
+* EVM Users Guide:  
+* Datasheet: SNVS778E –MAY 1999–REVISED JANUARY 2016
+*
+* Model Version: Final 1.00
+*
+*****************************************************************************
+*
+* Updates:
+*
+* Final 1.00
+* Release to Web
+*
+******************************************************************************
+*
+*Model Usage Notes:
+*
+*1.The following features have been modeled
+*   a. Startup
+*   b. PSRR.
+*   C. Current limit response.
+*   d. Dropout v/s Iout variation.
+*   e. Transient responses. 
+*2. Temperature effects are not been modeled.
+*   
+*****************************************************************************
+.SUBCKT LM337_N_TRANS IN ADJ OUT
+C_C5         0 N315027  1n  
+X_F1    OUT VZZ N315027 N310601 LM337_N_F1 
+C_U1_C2         0 U1_ERROR_AMP_OUT  1n  
+E_U1_ABM4         U1_N09035 0 VALUE { V(U1_REF)  
++ * (V(OUT) + 1e-6)  
++ / ((V(OUT)-V(ADJ)) + 1e-6)  }
+C_U1_C1         0 U1_REF  {1e-6*SQRT(TTRN)}  
+R_U1_R1         0 U1_REF  1G  
+V_U1_V5         U1_N11113 0 1
+X_U1_U2         U1_N12560 IN U1_N48025 VEN COMPHYS_BASIC_GEN PARAMS: VDD=1
++  VSS=0 VTHRESH=0.5
+V_U1_V3         U1_N48025 0 {UHYS}
+V_U1_V4         U1_N12560 0 {UVLO}
+R_U1_R5         U1_N09745 N222524  10 TC=0,0 
+R_U1_R3         U1_N08164 U1_REF  {3.333e5*SQRT(TTRN)} TC=0,0 
+C_U1_C3         0 N222524  1n  
+R_U1_R2         0 U1_ERROR_AMP_OUT  1G  
+E_U1_E1         U1_VDROP 0 TABLE { V(ILOAD, 0) } 
++ ( (-1.5, 2.4) (-1, 2.2) (-0.5, 1.9) (-0.2, 1.7) (-0.02, 1.55) )
+E_U1_ABM6         U1_N08164 0 VALUE { IF(V(VEN)> 0.6 & V(U1_N11113) > 0.6, 
++ {VREF}, 0)    }
+E_U1_ABM5         U1_N09745 0 VALUE { MAX(V(U1_ERROR_AMP_OUT),  
++ MIN(V(IN) + V(U1_VDROP), 0))   }
+R_U1_R4         U1_N09035 U1_ERROR_AMP_OUT  10 TC=0,0 
+R_R5         VZZ N334642  {ROUT}  
+X_H1    N334642 N315027 0 ILOAD LM337_N_H1 
+R_R6         VYY N315027  10 TC=0,0 
+R_R3         N310601 IN  3.5  
+R_R2         N222524 VXX  {PSRR*RINP}  
+R_R1         VXX N310601  {RINP}  
+C_C2         VXX N222524  {1/(6.28*PSRR*RINP*ZERO)}  
+C_C1         VXX N310601  {1/(6.28*RINP*POLE)}  
+E_ABM1         VYY 0 VALUE { MAX(V(VXX), (V(Vzz)+(ILIM*ROUT))) }
+E_ABM2         N350468 0 VALUE { (V(Vzz)+(ILIM*ROUT))    }
+.PARAM  psrr=0.08e-2 uvlo=-1.9 venb=-0.9 ilim=-2.2 pole=300 rinp=1e7 zero=1e5
++  rout=10m ttrn=100n ehys=0.4 vref=-1.25 uhys=0 drop=-250m
+.ENDS LM337_N_TRANS
+.subckt LM337_N_F1 1 2 3 4  
+F_F1         3 4 VF_F1 1
+VF_F1         1 2 0V
+.ends LM337_N_F1
+*$
+.subckt LM337_N_H1 1 2 3 4  
+H_H1         3 4 VH_H1 1
+VH_H1         1 2 0V
+.ends LM337_N_H1
+*$
+.SUBCKT COMPHYS_BASIC_GEN INP INM HYS OUT PARAMS: VDD=1 VSS=0 VTHRESH=0.5	
+EIN INP1 INM1 INP INM 1 
+EHYS INP1 INP2 VALUE { IF( V(1) > {VTHRESH},-V(HYS),0) }
+EOUT OUT 0 VALUE { IF( V(INP2)>V(INM1), {VDD} ,{VSS}) }
+R1 OUT 1 1
+C1 1 0 5n
+RINP1 INP1 0 1K
+.ENDS COMPHYS_BASIC_GEN
+*$
+
