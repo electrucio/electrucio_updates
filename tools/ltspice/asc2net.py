@@ -56,9 +56,15 @@ class Symbol:
 
     _cache: dict[str, "Symbol"] = {}
 
-    def __init__(self, name, pins, prefix, default_value=None):
+    def __init__(self, name, pins, prefix, default_value=None,
+                 spice_model=None):
         self.name, self.pins, self.prefix = name, pins, prefix
         self.default_value = default_value
+        # SYMATTR SpiceModel: en un dispositivo X es el nombre del SUBCIRCUITO,
+        # y el Value pasa a ser la lista de parametros (SET=2, por ejemplo).
+        # Sin esto, un simbolo con los dos atributos netlista sin nombre de
+        # subcircuito y el .sub no se enlaza.
+        self.spice_model = spice_model
 
     @classmethod
     def load(cls, name, local: Path) -> "Symbol":
@@ -79,7 +85,7 @@ class Symbol:
 
     @staticmethod
     def _parse(name, path: Path) -> "Symbol":
-        pins, prefix, cur, dval = [], None, None, None
+        pins, prefix, cur, dval, smodel = [], None, None, None, None
         for line in path.read_text(errors="replace").splitlines():
             t = line.split()
             if not t:
@@ -93,10 +99,12 @@ class Symbol:
                 prefix = t[2]
             elif t[0] == "SYMATTR" and len(t) > 2 and t[1] == "Value":
                 dval = line.split(None, 2)[2]
+            elif t[0] == "SYMATTR" and len(t) > 2 and t[1] == "SpiceModel":
+                smodel = t[2]
         pins.sort(key=lambda p: (p[2] if p[2] is not None else 0))
         if prefix is None:
             prefix = PREFIX_FALLBACK.get(name.lower(), "X")
-        return Symbol(name, [(p[0], p[1]) for p in pins], prefix, dval)
+        return Symbol(name, [(p[0], p[1]) for p in pins], prefix, dval, smodel)
 
 
 class Union:
@@ -207,6 +215,9 @@ def build_netlist(path: Path):
         val = it["value"] or sym.default_value or ""
         if it["value2"]:
             val += " " + it["value2"]
+        # Con SpiceModel, el nombre del subcircuito va ANTES de los parametros.
+        if sym.spice_model and not val.split(" ")[0].lower() == sym.spice_model.lower():
+            val = f"{sym.spice_model} {val}".rstrip()
         lines.append(f"{name} {' '.join(nets)} {val}".rstrip())
 
     return lines, directives, problems
