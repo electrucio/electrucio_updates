@@ -24,6 +24,20 @@ artículo de Silicon Chip, que es de pago y no se versiona.
 
 ## De dónde sale cada parte
 
+Las tres fuentes primarias **no son equivalentes**: cada una cubre una capa
+distinta del diseño, y conviene saber cuál pregunta responde cada una.
+
+| fuente | qué aporta | por qué vale |
+|---|---|---|
+| **TI SNVS773D**, el datasheet del LM317HV | **la topología** | no es «inspiración»: el circuito *es* sus figuras |
+| **Silicon Chip**, 45 V / 8 A, octubre 2019 | **las decisiones que el datasheet no cubre** | mismo chip y misma topología a diez veces la corriente: cuando ellos resuelven un problema, es el mismo problema |
+| **ESP Project 223** de Rod Elliott | **una sola idea**, la que define el aparato | cómo llegar a 0 V |
+
+Lo más fuerte de la genealogía está en la primera: **de los tres, este es el
+único que monta la figura 32 tal cual**. Silicon Chip sensa en alta con un
+INA282 y Rod Elliott limita en la entrada; aquí se hace lo que dice el
+fabricante.
+
 | bloque | referencia |
 |---|---|
 | Regulador ajustable con R1/R2 | fig. 16, §9.2.1 |
@@ -109,6 +123,48 @@ añadimos es hacer el límite ajustable con el TL431.
 1 µs, el aviso de que los relés en las tomas se sueldan con la corriente de carga
 de los condensadores, y el «nunca pongas el pote en serie con la carga».
 
+### Lo que NO tiene precedente
+
+Media genealogía es saber dónde se acaba. Versiones anteriores de este README
+decían «no hay ninguna decisión sin precedente, salvo una», y auditándolo contra
+el diseño actual **eran más de una**. Esta es la lista honesta, que es
+justamente la que hay que tener a mano cuando alguien pregunte:
+
+1. **El límite ajustable con el TL431.** La fig. 32 fija el límite por la Vbe de
+   un transistor y no se puede bajar sin un shunt enorme. Comparar el shunt
+   contra una referencia ajustable no lo hace ninguna de las tres.
+2. **Los dos potes en serie, grueso + fino.** No sale de ninguna de las tres: su
+   precedente real son **las fuentes de banco comerciales**, donde grueso/fino es
+   el idioma estándar del panel analógico. Es una genealogía legítima, pero de
+   otra familia. Silicon Chip usa potes corrientes porque los suyos *solo
+   dividen una referencia*; aquí el pote **es** el divisor de realimentación, y
+   de esa diferencia sale toda la cuenta de `Vmax²/R2`.
+3. **El emisor de `Q_min` al raíl BRUTO de −17 V.** El sumidero tiene precedente
+   doble (Q8/Q9 de Silicon Chip y Q1 del P223), pero colgarlo del raíl *sin
+   regular* es de aquí, y por un motivo que ninguno de los dos menciona: acota
+   la corriente de fallo si el transistor se va en corto colector-emisor
+   (44 mA y 2,5 W con `Re` = 1k3, contra 669 mA y 30 W si `Re` fuese a −5 V).
+4. **Las tomas conmutadas a mano.** El criterio de ~10 W por TO-220 viene de los
+   foros, pero la solución es de aquí: Silicon Chip resuelve el mismo problema
+   **reforzando el paso** con Q4–Q7 y dos ventiladores, y el P223 con **dos
+   canales**. Un rotativo de tres posiciones no lo hace ninguno.
+5. **No montar el filtro CRC.** Va *en contra* del «mínimo recomendado» del P223,
+   y la justificación no es de nadie: es la medida de [esta
+   sección](#hace-falta-el-filtro-crc).
+6. **Cuatro piezas que están en el BOM y en ninguna tabla de procedencia**: el
+   amortiguador `Csnub`/`Rsnub` del secundario, `Rbleed` del depósito y el filtro
+   de sensado `Rfilt`/`Cfilt`. Las tres primeras son **práctica estándar** de
+   cualquier fuente lineal —amortiguar el timbre entre la inductancia de fuga del
+   secundario y la capacidad de juntura de los diodos, y descargar el depósito al
+   apagar—, y la cuarta es una extensión del 100 nF del cursor que sí está
+   atribuido a Silicon Chip. No están mal: es que **no se puede decir de dónde
+   salen**, y eso es distinto de tener precedente.
+
+Y una que es de las tres a la vez, por si hace falta: el **valor** de `Cadj` no
+es de nadie. Silicon Chip pone 100 nF y lo razona, la fig. 21 de TI implica
+10 µF, y aquí hay 1 µF porque se midió el compromiso. Está *acotado* por
+precedente por los dos lados, pero el número salió de medir.
+
 ### Lo que deliberadamente no es
 
 Media explicación del diseño son los caminos que no se tomaron:
@@ -131,14 +187,19 @@ publicadas como precedente de cada decisión que el datasheet no cubre: la de
 **45 V / 8 A de Silicon Chip** (misma topología y misma familia de chip, de donde
 salen el raíl negativo, el sumidero de carga mínima y media docena de valores) y
 el **Project 223 de Rod Elliott** (de donde sale la referencia de −1,25 V que
-permite llegar a 0 V). No hay ninguna decisión sin precedente en una de esas
-tres, salvo una: hacer ajustable el límite de la figura 32 comparando el shunt
-contra una referencia de TL431. Frente a Silicon Chip es el mismo circuito
+permite llegar a 0 V). Frente a Silicon Chip es el mismo circuito
 simplificado —un décimo de la corriente, control de tensión pasivo en vez de dos
 lazos activos, sensado en baja en vez de un INA282— a cambio de ser lo bastante
 simple como para estar caracterizado entero. Frente al P223 es su mitad baja con
 un limitador distinto: continuo y en el retorno, en vez de por rangos y en la
-entrada.
+entrada. Y lo propio son cuatro cosas, ninguna de ellas la topología: el límite
+ajustable con TL431, los dos potes grueso+fino tomados del idioma de las fuentes
+comerciales, el sumidero colgado del raíl bruto para acotar su fallo, y las tomas
+conmutadas a mano para repartir el calor que ellos resuelven con más silicio.
+
+Dicho en una línea, por si hay que soltarlo rápido: **es la figura 32 del
+datasheet, montada tal cual, con la mitad baja del Project 223 pegada debajo
+para que llegue a cero y con las decisiones finas copiadas de Silicon Chip.**
 
 ## Lista de componentes
 
